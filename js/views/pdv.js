@@ -1,8 +1,9 @@
 // Tela do caixa (PDV): monta o pedido, recebe o pagamento e registra a venda.
 
 import { esc, formatarMoeda, lerMoeda } from '../util.js';
-import { FORMAS_PAGAMENTO, calcularTotais, registrarVenda } from '../store.js';
+import { FORMAS_PAGAMENTO, calcularTotais, registrarVenda, caixaAberto } from '../store.js';
 import { avisar, abrirDialogo, imprimirComanda, confirmar } from '../ui.js';
+import { renderizarAbertura, montarBarraCaixa } from './caixa.js';
 
 // O pedido em andamento fica guardado aqui, então trocar de aba não apaga o pedido.
 const pedido = {
@@ -19,7 +20,14 @@ function limparPedido() {
 }
 
 export function renderizar(raiz, app) {
+  const caixa = caixaAberto(app.estado);
+  if (!caixa) {
+    renderizarAbertura(raiz, app, () => renderizar(raiz, app));
+    return;
+  }
+
   raiz.innerHTML = `
+    <div class="barra-caixa painel"></div>
     <section class="pdv">
       <div class="pdv-produtos">
         <div class="filtros">
@@ -202,6 +210,7 @@ export function renderizar(raiz, app) {
     renderizar(raiz, app);
   });
 
+  montarBarraCaixa($('.barra-caixa'), app, caixa, () => renderizar(raiz, app));
   renderizarChips();
   renderizarGrade();
   renderizarItens();

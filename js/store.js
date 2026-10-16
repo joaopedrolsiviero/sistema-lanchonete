@@ -21,6 +21,7 @@ export function estadoVazio() {
     insumos: [],
     vendas: [],
     sequencia: { dia: null, numero: 0 },
+    caixas: [], // aberturas/fechamentos de caixa
   };
 }
 
@@ -72,7 +73,7 @@ export function estadoExemplo() {
 /** Valida e completa um objeto de dados (usado ao carregar e ao importar backup). */
 export function normalizar(dados) {
   if (!dados || typeof dados !== 'object') throw new Error('Arquivo inválido.');
-  const listas = ['categorias', 'produtos', 'insumos', 'vendas'];
+  const listas = ['categorias', 'produtos', 'insumos', 'vendas', 'caixas'];
   for (const l of listas) {
     if (dados[l] !== undefined && !Array.isArray(dados[l])) throw new Error(`Campo "${l}" inválido.`);
   }
@@ -86,6 +87,7 @@ export function normalizar(dados) {
     produtos: (dados.produtos || []).map((p) => ({ receita: [], ativo: true, ...p })),
     insumos: dados.insumos || [],
     vendas: dados.vendas || [],
+    caixas: dados.caixas || [],
   };
 }
 
@@ -121,6 +123,8 @@ function aplicarConsumo(estado, consumo, sinal) {
  * itens: [{produtoId, nome, preco, qtd, obs}]
  */
 export function registrarVenda(estado, itens, { desconto = 0, pagamento, recebido } = {}, agora = new Date()) {
+  const caixa = caixaAberto(estado);
+  if (!caixa) throw new Error('Abra o caixa antes de registrar vendas.');
   if (!itens.length) throw new Error('O pedido está vazio.');
   if (!FORMAS_PAGAMENTO[pagamento]) throw new Error('Escolha a forma de pagamento.');
 
@@ -147,6 +151,7 @@ export function registrarVenda(estado, itens, { desconto = 0, pagamento, recebid
     numero: estado.sequencia.numero,
     data: new Date(agora).toISOString(),
     dia,
+    caixaId: caixa.id,
     itens: itens.map(({ produtoId, nome, preco, qtd, obs }) => ({ produtoId, nome, preco, qtd, obs: obs || '' })),
     ...totais,
     pagamento,
@@ -164,6 +169,10 @@ export function cancelarVenda(estado, vendaId, agora = new Date()) {
   const venda = estado.vendas.find((v) => v.id === vendaId);
   if (!venda) throw new Error('Venda não encontrada.');
   if (venda.cancelada) throw new Error('Esta venda já foi cancelada.');
+  const caixa = venda.caixaId && estado.caixas.find((c) => c.id === venda.caixaId);
+  if (caixa?.fechamento) {
+    throw new Error('Esta venda é de um caixa já fechado e não pode mais ser cancelada.');
+  }
   aplicarConsumo(estado, venda.consumo || [], +1);
   venda.cancelada = true;
   venda.canceladaEm = new Date(agora).toISOString();
@@ -200,6 +209,79 @@ export function resumirVendas(vendas) {
     porPagamento,
     produtos: [...produtos.values()].sort((a, b) => b.qtd - a.qtd || b.total - a.total),
   };
+}
+
+// ---------- Abertura e fechamento de caixa ----------
+
+export const TIPOS_MOVIMENTO = { sangria: 'Sangria', suprimento: 'Suprimento' };
+
+/** O caixa aberto no momento (ou null). Só pode haver um aberto por vez. */
+export function caixaAberto(estado) {
+  return estado.caixas.find((c) => !c.fechamento) || null;
+}
+
+/** Abre o caixa com o fundo de troco (dinheiro que já está na gaveta). */
+export function abrirCaixa(estado, { fundo }, agora = new Date()) {
+  if (caixaAberto(estado)) throw new Error('Já existe um caixa aberto.');
+  if (!(fundo >= 0)) throw new Error('Informe o fundo de troco (pode ser zero).');
+  const caixa = { id: gerarId(), abertura: new Date(agora).toISOString(), fundo, movimentos: [], fechamento: null };
+  estado.caixas.push(caixa);
+  return caixa;
+}
+
+/**
+ * Totais de um caixa: vendas por forma de pagamento e quanto deveria haver em dinheiro na gaveta.
+ * Dinheiro esperado = fundo + vendas em dinheiro + suprimentos − sangrias.
+ * (Vendas em dinheiro contam pelo total: o troco já saiu da gaveta.)
+ */
+export function resumirCaixa(estado, caixa) {
+  const vendas = estado.vendas.filter((v) => v.caixaId === caixa.id);
+  const validas = vendas.filter((v) => !v.cancelada);
+  const porPagamento = Object.fromEntries(Object.keys(FORMAS_PAGAMENTO).map((k) => [k, 0]));
+  for (const v of validas) porPagamento[v.pagamento] += v.total;
+  const soma = (tipo) => caixa.movimentos.filter((m) => m.tipo === tipo).reduce((s, m) => s + m.valor, 0);
+  const suprimentos = soma('suprimento');
+  const sangrias = soma('sangria');
+  return {
+    pedidos: validas.length,
+    cancelados: vendas.length - validas.length,
+    total: validas.reduce((s, v) => s + v.total, 0),
+    descontos: validas.reduce((s, v) => s + v.desconto, 0),
+    porPagamento,
+    suprimentos,
+    sangrias,
+    dinheiroEsperado: caixa.fundo + porPagamento.dinheiro + suprimentos - sangrias,
+  };
+}
+
+/** Sangria (retirada de dinheiro da gaveta) ou suprimento (entrada de troco). */
+export function movimentarCaixa(estado, { tipo, valor, motivo = '' }, agora = new Date()) {
+  const caixa = caixaAberto(estado);
+  if (!caixa) throw new Error('Não há caixa aberto.');
+  if (!TIPOS_MOVIMENTO[tipo]) throw new Error('Tipo de movimento inválido.');
+  if (!(valor > 0)) throw new Error('Informe um valor maior que zero.');
+  if (tipo === 'sangria' && valor > resumirCaixa(estado, caixa).dinheiroEsperado) {
+    throw new Error('A sangria é maior que o dinheiro que deveria estar na gaveta.');
+  }
+  const movimento = { id: gerarId(), tipo, valor, motivo: motivo.trim(), data: new Date(agora).toISOString() };
+  caixa.movimentos.push(movimento);
+  return movimento;
+}
+
+/** Fecha o caixa com o dinheiro contado na gaveta e guarda o resumo do momento. */
+export function fecharCaixa(estado, { contado, obs = '' }, agora = new Date()) {
+  const caixa = caixaAberto(estado);
+  if (!caixa) throw new Error('Não há caixa aberto.');
+  if (!(contado >= 0)) throw new Error('Informe quanto dinheiro foi contado na gaveta.');
+  const resumo = resumirCaixa(estado, caixa);
+  caixa.fechamento = {
+    data: new Date(agora).toISOString(),
+    contado,
+    diferenca: contado - resumo.dinheiroEsperado,
+    obs: obs.trim(),
+    resumo,
+  };
+  return caixa;
 }
 
 // ---------- Estoque ----------

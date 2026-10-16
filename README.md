@@ -4,11 +4,15 @@ Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no 
 
 - **Caixa (PDV):** monte o pedido tocando nos produtos, adicione observações ("sem açúcar", "leite sem lactose"), aplique desconto,
   escolha a forma de pagamento (dinheiro com cálculo de troco, Pix, débito ou crédito) e imprima a comanda.
+- **Abertura e fechamento de caixa:** abre com o fundo de troco; registra sangrias (retiradas) e suprimentos
+  (reforço de troco); no fechamento mostra as vendas por forma de pagamento, o dinheiro esperado na gaveta,
+  o valor contado e a diferença (sobra/falta), com relatório para imprimir. Só é possível vender com o caixa aberto,
+  e vendas de um caixa já fechado não podem ser canceladas.
 - **Cardápio:** categorias, produtos, preços e *ficha técnica* (quais insumos cada produto consome).
 - **Estoque:** insumos com estoque mínimo. A baixa é automática a cada venda, e a venda cancelada devolve os insumos.
   Há alerta de reposição.
 - **Relatórios:** faturamento, pedidos, ticket médio, vendas por forma de pagamento, produtos mais vendidos,
-  histórico com cancelamento/reimpressão e exportação para planilha (CSV).
+  histórico de pedidos e de fechamentos de caixa, cancelamento/reimpressão e exportação para planilha (CSV).
 - **Ajustes:** nome da loja, backup automático numa pasta, backup manual (baixar/restaurar).
 - Funciona **offline** e pode ser instalado como app (PWA).
 

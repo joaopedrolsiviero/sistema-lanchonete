@@ -3,6 +3,7 @@
 import { esc, formatarMoeda, chaveDia, somarDias, formatarDataHora, formatarDia } from '../util.js';
 import { FORMAS_PAGAMENTO, vendasNoPeriodo, resumirVendas, cancelarVenda } from '../store.js';
 import { avisar, abrirDialogo, imprimirComanda, confirmar } from '../ui.js';
+import { dialogoDetalheCaixa, textoDiferenca } from './caixa.js';
 
 const filtro = { periodo: 'hoje', de: null, ate: null };
 
@@ -46,6 +47,10 @@ export function renderizar(raiz, app) {
   const vendas = vendasNoPeriodo(estado, de, ate);
   const r = resumirVendas(vendas);
   const maxProduto = Math.max(1, ...r.produtos.map((p) => p.qtd));
+  const caixaFechado = (v) => estado.caixas.find((c) => c.id === v.caixaId)?.fechamento;
+  const caixas = estado.caixas
+    .filter((c) => { const d = chaveDia(c.abertura); return d >= de && d <= ate; })
+    .reverse();
 
   const opcoes = { hoje: 'Hoje', ontem: 'Ontem', '7dias': 'Últimos 7 dias', mes: 'Este mês', personalizado: 'Escolher datas' };
 
@@ -99,6 +104,31 @@ export function renderizar(raiz, app) {
       </div>
 
       <div class="painel">
+        <h2>Aberturas e fechamentos de caixa</h2>
+        <div class="tabela-rolagem">
+          <table class="tabela">
+            <thead><tr><th>Abertura</th><th>Fechamento</th><th class="dir">Vendas</th>
+              <th class="dir">Dinheiro esperado</th><th class="dir">Contado</th><th>Diferença</th><th></th></tr></thead>
+            <tbody>
+              ${caixas.map((c) => {
+                const f = c.fechamento;
+                return `
+                <tr>
+                  <td class="nowrap">${formatarDataHora(c.abertura)}</td>
+                  <td class="nowrap">${f ? formatarDataHora(f.data) : '<span class="tag ok">aberto</span>'}</td>
+                  <td class="dir">${f ? formatarMoeda(f.resumo.total) : '—'}</td>
+                  <td class="dir">${f ? formatarMoeda(f.resumo.dinheiroEsperado) : '—'}</td>
+                  <td class="dir">${f ? formatarMoeda(f.contado) : '—'}</td>
+                  <td>${f ? `<span class="tag ${f.diferenca === 0 ? 'ok' : 'perigo'}">${textoDiferenca(f.diferenca)}</span>` : ''}</td>
+                  <td class="dir"><button type="button" class="btn mini" data-caixa="${c.id}">Ver</button></td>
+                </tr>`;
+              }).join('') || '<tr><td colspan="7" class="vazio">Nenhum caixa aberto no período.</td></tr>'}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="painel">
         <h2>Pedidos</h2>
         <div class="tabela-rolagem">
           <table class="tabela">
@@ -113,7 +143,7 @@ export function renderizar(raiz, app) {
                   <td class="dir">${formatarMoeda(v.total)}${v.cancelada ? ' <span class="tag perigo">cancelado</span>' : ''}</td>
                   <td class="dir nowrap">
                     <button type="button" class="btn mini" data-ver="${v.id}">Ver</button>
-                    ${v.cancelada ? '' : `<button type="button" class="btn mini perigo" data-cancelar="${v.id}">Cancelar</button>`}
+                    ${v.cancelada || caixaFechado(v) ? '' : `<button type="button" class="btn mini perigo" data-cancelar="${v.id}">Cancelar</button>`}
                   </td>
                 </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum pedido no período.</td></tr>'}
             </tbody>
@@ -140,6 +170,7 @@ export function renderizar(raiz, app) {
       renderizar(raiz, app);
     }
     if (b.dataset.acao === 'csv') baixarCsv(vendas, de, ate);
+    if (b.dataset.caixa) dialogoDetalheCaixa(app, estado.caixas.find((c) => c.id === b.dataset.caixa));
     if (b.dataset.ver) {
       const v = estado.vendas.find((x) => x.id === b.dataset.ver);
       abrirDialogo({

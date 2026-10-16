@@ -78,3 +78,40 @@ export function imprimirComanda(venda, nomeLoja) {
     </div>`;
   window.print();
 }
+
+/** Imprime o relatório de fechamento (ou parcial, se o caixa ainda estiver aberto). */
+export function imprimirFechamento(caixa, resumo, nomeLoja) {
+  const f = caixa.fechamento;
+  const linha = (rotulo, valor) => `<tr><td>${rotulo}</td><td class="dir">${valor}</td></tr>`;
+  const diferenca = f
+    ? (f.diferenca === 0 ? 'Confere' : `${f.diferenca > 0 ? 'Sobra' : 'Falta'} ${formatarMoeda(Math.abs(f.diferenca))}`)
+    : '';
+  const area = document.getElementById('impressao');
+  area.innerHTML = `
+    <div class="cupom">
+      <h1>${esc(nomeLoja)}</h1>
+      <p class="centro"><strong>${f ? 'FECHAMENTO DE CAIXA' : 'RELATÓRIO PARCIAL DE CAIXA'}</strong></p>
+      <p class="centro">Abertura: ${formatarDataHora(caixa.abertura)}<br>
+        ${f ? `Fechamento: ${formatarDataHora(f.data)}` : 'Caixa ainda aberto'}</p>
+      <hr>
+      <table>
+        ${linha('Pedidos', resumo.pedidos)}
+        ${resumo.cancelados ? linha('Cancelados', resumo.cancelados) : ''}
+        ${Object.entries(FORMAS_PAGAMENTO).map(([k, nome]) => linha(nome, formatarMoeda(resumo.porPagamento[k] || 0))).join('')}
+        ${linha('<strong>TOTAL VENDAS</strong>', `<strong>${formatarMoeda(resumo.total)}</strong>`)}
+      </table>
+      <hr>
+      <table>
+        ${linha('Fundo de troco', formatarMoeda(caixa.fundo))}
+        ${linha('+ Vendas dinheiro', formatarMoeda(resumo.porPagamento.dinheiro || 0))}
+        ${linha('+ Suprimentos', formatarMoeda(resumo.suprimentos))}
+        ${linha('- Sangrias', formatarMoeda(resumo.sangrias))}
+        ${linha('<strong>Esperado</strong>', `<strong>${formatarMoeda(resumo.dinheiroEsperado)}</strong>`)}
+        ${f ? linha('Contado', formatarMoeda(f.contado)) + linha('<strong>Diferença</strong>', `<strong>${diferenca}</strong>`) : ''}
+      </table>
+      ${f?.obs ? `<hr><p>Obs.: ${esc(f.obs)}</p>` : ''}
+      <hr>
+      <p class="centro"><br>_______________________<br>Conferido por</p>
+    </div>`;
+  window.print();
+}
