@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lanchonete — Caixa</title>
+  <meta name="theme-color" content="#c2410c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topo">
+    <div class="marca"><span class="logo">🍔</span> <span id="nome-loja">Lanchonete</span></div>
+    <nav class="abas">
+      <a href="#pdv" data-rota="pdv">Caixa</a>
+      <a href="#cardapio" data-rota="cardapio">Cardápio</a>
+      <a href="#estoque" data-rota="estoque">Estoque <span id="badge-estoque" class="badge" hidden></span></a>
+      <a href="#relatorios" data-rota="relatorios">Relatórios</a>
+      <a href="#ajustes" data-rota="ajustes">Ajustes</a>
+    </nav>
+  </header>
+
+  <main id="conteudo"></main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="dialogo"></dialog>
+  <!-- Área usada só na impressão da comanda -->
+  <div id="impressao"></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
