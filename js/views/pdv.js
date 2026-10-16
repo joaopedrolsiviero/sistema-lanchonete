@@ -140,6 +140,7 @@ export function renderizar(raiz, app) {
           <p class="destaque">Total: <strong>${formatarMoeda(venda.total)}</strong></p>
           ${venda.troco ? `<p class="destaque">Troco: <strong>${formatarMoeda(venda.troco)}</strong></p>` : ''}`,
         textoSalvar: 'Imprimir comanda',
+        textoFechar: 'Fechar',
         aoSalvar: () => setTimeout(() => imprimirComanda(venda, app.estado.config.nomeLoja), 50),
       });
     } catch (e) {

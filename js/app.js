@@ -43,6 +43,9 @@ function atualizarTopo() {
 function renderizar() {
   const rota = location.hash.slice(1) || 'pdv';
   const tela = telas[rota] || pdv;
+  // Fecha diálogo aberto ao trocar de tela (ex.: botão "voltar" do navegador).
+  const dialogo = document.getElementById('dialogo');
+  if (dialogo.open) dialogo.close();
   document.querySelectorAll('[data-rota]').forEach((a) => {
     a.classList.toggle('ativa', a.dataset.rota === rota);
   });

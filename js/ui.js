@@ -17,7 +17,7 @@ export function avisar(mensagem, tipo = 'ok') {
  * `aoSalvar(form)` pode lançar erro para manter o diálogo aberto e exibir a mensagem.
  * `aoMontar(form)` permite ligar eventos dinâmicos.
  */
-export function abrirDialogo({ titulo, corpo, textoSalvar = 'Salvar', aoSalvar, aoMontar }) {
+export function abrirDialogo({ titulo, corpo, textoSalvar = 'Salvar', textoFechar = 'Cancelar', aoSalvar, aoMontar }) {
   const dlg = document.getElementById('dialogo');
   dlg.innerHTML = `
     <form method="dialog" class="form-dialogo">
@@ -25,7 +25,7 @@ export function abrirDialogo({ titulo, corpo, textoSalvar = 'Salvar', aoSalvar, 
       <div class="campos">${corpo}</div>
       <p class="erro" hidden></p>
       <div class="acoes">
-        <button type="button" class="btn" data-acao="fechar">Cancelar</button>
+        <button type="button" class="btn" data-acao="fechar">${esc(textoFechar)}</button>
         ${aoSalvar ? `<button type="submit" class="btn primario">${esc(textoSalvar)}</button>` : ''}
       </div>
     </form>`;

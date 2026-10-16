@@ -153,6 +153,7 @@ export function renderizar(raiz, app) {
           <p class="destaque">Total: <strong>${formatarMoeda(v.total)}</strong></p>
           ${v.troco ? `<p>Recebido ${formatarMoeda(v.recebido)} · troco ${formatarMoeda(v.troco)}</p>` : ''}`,
         textoSalvar: 'Reimprimir',
+        textoFechar: 'Fechar',
         aoSalvar: () => setTimeout(() => imprimirComanda(v, estado.config.nomeLoja), 50),
       });
     }
