@@ -1,9 +1,8 @@
-// Regras de negócio e persistência dos dados.
+// Regras de negócio (a gravação dos dados fica em persistencia.js).
 // Valores em dinheiro são sempre guardados em CENTAVOS (inteiros) para evitar erros de arredondamento.
 
 import { gerarId, chaveDia, arredondar } from './util.js';
 
-export const CHAVE_STORAGE = 'lanchonete:dados';
 export const VERSAO = 1;
 
 export const FORMAS_PAGAMENTO = {
@@ -68,22 +67,7 @@ export function estadoExemplo() {
   return e;
 }
 
-// ---------- Persistência ----------
-
-export function carregar(storage = globalThis.localStorage) {
-  const bruto = storage?.getItem(CHAVE_STORAGE);
-  if (!bruto) return estadoExemplo();
-  try {
-    return normalizar(JSON.parse(bruto));
-  } catch (erro) {
-    console.error('Dados corrompidos, usando estado vazio', erro);
-    return estadoVazio();
-  }
-}
-
-export function salvar(estado, storage = globalThis.localStorage) {
-  storage.setItem(CHAVE_STORAGE, JSON.stringify(estado));
-}
+// ---------- Validação ----------
 
 /** Valida e completa um objeto de dados (usado ao carregar e ao importar backup). */
 export function normalizar(dados) {

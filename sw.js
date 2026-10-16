@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do sistema para funcionar sem internet.
 // Ao alterar qualquer arquivo, aumente a versão abaixo para os navegadores baixarem a atualização.
-const VERSAO = 'recanto-v3';
+const VERSAO = 'recanto-v4';
 const ARQUIVOS = [
   './',
   'index.html',
@@ -9,6 +9,7 @@ const ARQUIVOS = [
   'js/ui.js',
   'js/util.js',
   'js/store.js',
+  'js/persistencia.js',
   'js/views/pdv.js',
   'js/views/cardapio.js',
   'js/views/estoque.js',

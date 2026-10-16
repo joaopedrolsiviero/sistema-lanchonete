@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {
   estadoExemplo, estadoVazio, registrarVenda, cancelarVenda, calcularTotais,
   resumirVendas, vendasNoPeriodo, insumosEmFalta, entradaEstoque, salvarProduto,
-  removerInsumo, removerCategoria, normalizar, carregar, salvar,
+  removerInsumo, removerCategoria, normalizar,
 } from '../js/store.js';
+import { dividirEstado, juntarEstado } from '../js/persistencia.js';
 import { lerMoeda, chaveDia, somarDias } from '../js/util.js';
 
 function itemDe(estado, nome, qtd = 1) {
@@ -135,13 +136,23 @@ test('dados de exemplo são do Recanto do Café', () => {
   assert.deepEqual(e.categorias.map((c) => c.nome), ['Cafés', 'Salgados', 'Doces', 'Bebidas']);
 });
 
-test('salvar e carregar mantém os dados; backup inválido é recusado', () => {
-  const memoria = new Map();
-  const storage = { getItem: (k) => memoria.get(k) ?? null, setItem: (k, v) => memoria.set(k, v) };
-  const e = estadoExemplo();
-  registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'pix' });
-  salvar(e, storage);
-  assert.deepEqual(carregar(storage), e);
+test('backup inválido é recusado', () => {
   assert.throws(() => normalizar({ vendas: 'x' }), /inválido/);
   assert.throws(() => normalizar(null), /inválido/);
+});
+
+test('dados são divididos por dia e remontados sem perda', () => {
+  const e = estadoExemplo();
+  registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'pix' }, new Date(2026, 9, 14, 9));
+  registrarVenda(e, [itemDe(e, 'Coxinha')], { pagamento: 'pix' }, new Date(2026, 9, 15, 9));
+  registrarVenda(e, [itemDe(e, 'Cappuccino')], { pagamento: 'pix' }, new Date(2026, 9, 15, 10));
+
+  const registros = dividirEstado(e);
+  assert.deepEqual([...registros.keys()], ['meta', 'vendas:2026-10-14', 'vendas:2026-10-15']);
+  assert.equal(registros.get('vendas:2026-10-15').length, 2);
+  assert.equal(registros.get('meta').vendas, undefined);
+
+  // Simula a ida e volta pelo banco (gravado como texto JSON).
+  const lidos = new Map([...registros].reverse().map(([k, v]) => [k, JSON.parse(JSON.stringify(v))]));
+  assert.deepEqual(juntarEstado(lidos), e);
 });

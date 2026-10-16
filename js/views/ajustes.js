@@ -1,8 +1,15 @@
-// Tela de ajustes: nome da loja, backup (exportar/importar) e limpeza dos dados.
+// Tela de ajustes: nome da loja, armazenamento, backup (exportar/importar) e limpeza dos dados.
 
 import { esc, chaveDia } from '../util.js';
 import { normalizar, estadoVazio, estadoExemplo } from '../store.js';
 import { avisar, confirmar } from '../ui.js';
+import { pedirArmazenamentoPermanente, situacaoArmazenamento } from '../persistencia.js';
+
+function formatarTamanho(bytes) {
+  if (bytes == null) return '?';
+  if (bytes >= 1e9) return `${(bytes / 1e9).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} GB`;
+  return `${(bytes / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
+}
 
 export function renderizar(raiz, app) {
   const { estado } = app;
@@ -15,6 +22,11 @@ export function renderizar(raiz, app) {
         <label>Nome (aparece na comanda) <input name="nomeLoja" required value="${esc(estado.config.nomeLoja)}"></label>
         <button type="submit" class="btn primario">Salvar</button>
       </form>
+
+      <div class="painel" data-painel="armazenamento">
+        <h2>Armazenamento</h2>
+        <p class="muted">Verificando…</p>
+      </div>
 
       <div class="painel">
         <h2>Backup</h2>
@@ -39,6 +51,32 @@ export function renderizar(raiz, app) {
 
   const pagina = raiz.firstElementChild;
 
+  async function mostrarArmazenamento() {
+    const painel = pagina.querySelector('[data-painel="armazenamento"]');
+    const info = await situacaoArmazenamento();
+    const tipo = app.armazenamento.tipo === 'indexeddb'
+      ? 'Banco de dados do navegador (IndexedDB)'
+      : 'localStorage (limite de ~5 MB — este navegador não oferece IndexedDB)';
+    const protecao = info.permanente === true
+      ? '<span class="tag ok">ativa</span>'
+      : info.permanente === false
+        ? `<span class="tag aviso">não concedida</span>
+           <button type="button" class="btn mini" data-acao="permanente">Pedir de novo</button>
+           <br><small class="muted">O navegador costuma liberar quando o sistema está instalado como app
+           (ícone "Instalar" na barra de endereço).</small>`
+        : '<span class="tag">não suportada</span>';
+    painel.innerHTML = `
+      <h2>Armazenamento</h2>
+      <table class="tabela">
+        <tr><td>Onde</td><td>${tipo}</td></tr>
+        <tr><td>Espaço usado</td><td>${formatarTamanho(info.usado)} de ${formatarTamanho(info.cota)} disponíveis</td></tr>
+        <tr><td>Proteção contra limpeza automática</td><td>${protecao}</td></tr>
+      </table>
+      <p class="muted">A proteção impede que o navegador apague os dados sozinho para liberar espaço.
+      Mesmo com ela, "Limpar dados de navegação" apaga tudo — por isso o backup continua importante.</p>`;
+  }
+  mostrarArmazenamento().catch((e) => console.warn(e));
+
   pagina.querySelector('[data-form="loja"]').addEventListener('submit', (ev) => {
     ev.preventDefault();
     estado.config.nomeLoja = ev.target.nomeLoja.value.trim() || 'Recanto do Café';
@@ -48,6 +86,12 @@ export function renderizar(raiz, app) {
 
   pagina.addEventListener('click', (ev) => {
     const acao = ev.target.closest('button')?.dataset.acao;
+    if (acao === 'permanente') {
+      pedirArmazenamentoPermanente().then((ok) => {
+        avisar(ok ? 'Proteção ativada.' : 'O navegador não liberou a proteção agora.', ok ? 'ok' : 'erro');
+        mostrarArmazenamento();
+      });
+    }
     if (acao === 'exportar') {
       const blob = new Blob([JSON.stringify(estado, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
