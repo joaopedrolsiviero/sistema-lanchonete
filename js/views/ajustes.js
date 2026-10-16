@@ -1,9 +1,10 @@
 // Tela de ajustes: nome da loja, armazenamento, backup (exportar/importar) e limpeza dos dados.
 
-import { esc, chaveDia } from '../util.js';
+import { esc, chaveDia, formatarDataHora } from '../util.js';
 import { normalizar, estadoVazio, estadoExemplo } from '../store.js';
 import { avisar, confirmar } from '../ui.js';
 import { pedirArmazenamentoPermanente, situacaoArmazenamento } from '../persistencia.js';
+import * as backupAuto from '../backupAuto.js';
 
 function formatarTamanho(bytes) {
   if (bytes == null) return '?';
@@ -28,11 +29,12 @@ export function renderizar(raiz, app) {
         <p class="muted">Verificando…</p>
       </div>
 
+      <div class="painel" data-painel="backup-auto"></div>
+
       <div class="painel">
-        <h2>Backup</h2>
-        <p class="muted">Os dados ficam salvos <strong>somente neste navegador</strong>. Faça backup com frequência
-        (por exemplo, no fim do dia) e guarde o arquivo no Google Drive ou num pen drive.
-        Limpar os dados do navegador apaga tudo.</p>
+        <h2>Backup manual</h2>
+        <p class="muted">Baixa um arquivo com todos os dados, na hora. Use "Restaurar backup" para voltar
+        um backup (manual ou automático) — por exemplo, num computador novo.</p>
         <div class="botoes">
           <button type="button" class="btn primario" data-acao="exportar">Baixar backup</button>
           <label class="btn">Restaurar backup<input type="file" accept="application/json,.json" data-acao="importar" hidden></label>
@@ -77,6 +79,82 @@ export function renderizar(raiz, app) {
   }
   mostrarArmazenamento().catch((e) => console.warn(e));
 
+  function mostrarBackupAuto(s = backupAuto.situacao()) {
+    const painel = pagina.querySelector('[data-painel="backup-auto"]');
+    const dica = `<p class="muted"><strong>Dica:</strong> crie uma pasta (por exemplo "Backup Recanto") dentro do
+      <strong>Google Drive para computador</strong> ou do <strong>OneDrive</strong> e escolha ela aqui.
+      Assim cada backup também vai para a nuvem. Se o navegador perguntar, escolha "Permitir sempre".</p>`;
+    const ultimo = s.ultimo ? formatarDataHora(s.ultimo) : 'nenhum ainda';
+    const conteudo = {
+      'nao-suportado': `<p>Este navegador não permite backup automático em pasta.
+        Use o <strong>Chrome</strong> ou o <strong>Edge</strong> no computador — ou faça o backup manual abaixo.</p>`,
+      inativo: `<p>Grava sozinho uma cópia de todos os dados numa pasta do computador, a cada alteração.
+        Fica um arquivo por dia; os 30 mais recentes são mantidos.</p>
+        ${dica}
+        <button type="button" class="btn primario" data-acao="escolher-pasta">Escolher pasta e ativar</button>`,
+      ativo: `<table class="tabela">
+          <tr><td>Situação</td><td><span class="tag ok">ativo</span></td></tr>
+          <tr><td>Pasta</td><td>${esc(s.pasta)}</td></tr>
+          <tr><td>Último backup</td><td>${ultimo}</td></tr>
+        </table>
+        <div class="botoes">
+          <button type="button" class="btn" data-acao="backup-agora">Fazer backup agora</button>
+          <button type="button" class="btn" data-acao="escolher-pasta">Trocar pasta</button>
+          <button type="button" class="btn perigo" data-acao="desativar-backup">Desativar</button>
+        </div>`,
+      'sem-permissao': `<table class="tabela">
+          <tr><td>Situação</td><td><span class="tag aviso">pausado</span></td></tr>
+          <tr><td>Pasta</td><td>${esc(s.pasta)}</td></tr>
+          <tr><td>Último backup</td><td>${ultimo}</td></tr>
+        </table>
+        <p class="muted">O navegador pede sua permissão de novo para gravar na pasta.</p>
+        <div class="botoes">
+          <button type="button" class="btn primario" data-acao="permitir-pasta">Permitir acesso à pasta</button>
+          <button type="button" class="btn" data-acao="escolher-pasta">Trocar pasta</button>
+        </div>`,
+      erro: `<table class="tabela">
+          <tr><td>Situação</td><td><span class="tag perigo">com erro</span></td></tr>
+          <tr><td>Pasta</td><td>${esc(s.pasta || '—')}</td></tr>
+          <tr><td>Último backup</td><td>${ultimo}</td></tr>
+        </table>
+        <p class="erro">Erro: ${esc(s.erro)}</p>
+        <div class="botoes">
+          <button type="button" class="btn primario" data-acao="backup-agora">Tentar de novo</button>
+          <button type="button" class="btn" data-acao="escolher-pasta">Escolher outra pasta</button>
+        </div>`,
+    }[s.situacao];
+    painel.innerHTML = `<h2>Backup automático</h2>${conteudo}`;
+  }
+  mostrarBackupAuto();
+  const pararDeOuvir = backupAuto.aoMudar((s) => {
+    if (!pagina.isConnected) return pararDeOuvir(); // saiu da tela de Ajustes
+    mostrarBackupAuto(s);
+  });
+
+  async function acaoBackup(acao) {
+    try {
+      if (acao === 'escolher-pasta') {
+        await backupAuto.escolherPasta();
+        avisar('Backup automático ativado.');
+      }
+      if (acao === 'permitir-pasta') {
+        await backupAuto.permitirNovamente();
+        avisar('Backup automático reativado.');
+      }
+      if (acao === 'backup-agora') {
+        await backupAuto.fazerAgora();
+        avisar('Backup gravado na pasta.');
+      }
+      if (acao === 'desativar-backup' && confirmar('Desativar o backup automático? Os arquivos já gravados continuam na pasta.')) {
+        await backupAuto.desativar();
+        avisar('Backup automático desativado.');
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return; // fechou o seletor de pasta sem escolher
+      avisar(`Backup: ${e.message}`, 'erro');
+    }
+  }
+
   pagina.querySelector('[data-form="loja"]').addEventListener('submit', (ev) => {
     ev.preventDefault();
     estado.config.nomeLoja = ev.target.nomeLoja.value.trim() || 'Recanto do Café';
@@ -86,6 +164,7 @@ export function renderizar(raiz, app) {
 
   pagina.addEventListener('click', (ev) => {
     const acao = ev.target.closest('button')?.dataset.acao;
+    if (['escolher-pasta', 'permitir-pasta', 'backup-agora', 'desativar-backup'].includes(acao)) acaoBackup(acao);
     if (acao === 'permanente') {
       pedirArmazenamentoPermanente().then((ok) => {
         avisar(ok ? 'Proteção ativada.' : 'O navegador não liberou a proteção agora.', ok ? 'ok' : 'erro');

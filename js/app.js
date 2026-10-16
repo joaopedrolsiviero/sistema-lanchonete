@@ -2,6 +2,7 @@
 
 import { insumosEmFalta } from './store.js';
 import { abrirArmazenamento, pedirArmazenamentoPermanente } from './persistencia.js';
+import * as backupAuto from './backupAuto.js';
 import { avisar } from './ui.js';
 import { esc } from './util.js';
 import * as pdv from './views/pdv.js';
@@ -18,12 +19,14 @@ const app = {
   /** Grava os dados no navegador (em segundo plano) e atualiza indicadores do topo. */
   salvar() {
     app.armazenamento.gravar(app.estado).catch(falhaAoGravar);
+    backupAuto.agendar();
     atualizarTopo();
   },
   /** Substitui todos os dados (importação de backup / reset). */
   substituir(novoEstado) {
     app.estado = novoEstado;
     app.armazenamento.gravar(novoEstado, { substituirTudo: true }).catch(falhaAoGravar);
+    backupAuto.agendar();
     atualizarTopo();
     renderizar();
   },
@@ -58,6 +61,29 @@ function renderizar() {
   tela.renderizar(conteudo, app);
 }
 
+/** Faixa de aviso abaixo do topo quando o backup automático não está funcionando. */
+function atualizarFaixaBackup(s) {
+  const faixa = document.getElementById('faixa-backup');
+  let html = '';
+  if (s.situacao === 'sem-permissao') {
+    html = `Backup automático pausado: o navegador pede sua permissão para gravar na pasta.
+      <button type="button" class="btn mini" data-acao="permitir-backup">Permitir</button>`;
+  } else if (s.situacao === 'erro') {
+    html = `Backup automático falhou: ${esc(s.erro)}. <a href="#ajustes">Ver em Ajustes</a>`;
+  } else if (s.situacao === 'inativo') {
+    html = 'Backup automático desativado. <a href="#ajustes">Ativar em Ajustes</a>';
+  }
+  faixa.innerHTML = html;
+  faixa.hidden = !html;
+}
+
+document.getElementById('faixa-backup').addEventListener('click', (ev) => {
+  if (ev.target.dataset.acao !== 'permitir-backup') return;
+  backupAuto.permitirNovamente()
+    .then(() => avisar('Backup automático reativado.'))
+    .catch((e) => avisar(e.message, 'erro'));
+});
+
 async function iniciar() {
   const conteudo = document.getElementById('conteudo');
   conteudo.innerHTML = '<p class="vazio">Carregando…</p>';
@@ -80,6 +106,9 @@ async function iniciar() {
   window.addEventListener('hashchange', renderizar);
   atualizarTopo();
   renderizar();
+
+  backupAuto.aoMudar(atualizarFaixaBackup);
+  backupAuto.iniciar(() => app.estado).catch((e) => console.warn('Backup automático:', e));
 
   // Pede ao navegador para não apagar os dados automaticamente.
   pedirArmazenamentoPermanente().catch((e) => console.warn(e));

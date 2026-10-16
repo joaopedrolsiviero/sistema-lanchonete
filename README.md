@@ -9,7 +9,7 @@ Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no 
   Há alerta de reposição.
 - **Relatórios:** faturamento, pedidos, ticket médio, vendas por forma de pagamento, produtos mais vendidos,
   histórico com cancelamento/reimpressão e exportação para planilha (CSV).
-- **Ajustes:** nome da loja e backup (baixar/restaurar).
+- **Ajustes:** nome da loja, backup automático numa pasta, backup manual (baixar/restaurar).
 - Funciona **offline** e pode ser instalado como app (PWA).
 
 ## Onde ficam os dados
@@ -21,8 +21,17 @@ Os dados ficam salvos **no navegador do computador do caixa**, no banco de dados
 - O sistema pede ao navegador **armazenamento permanente**, para ele não apagar os dados sozinho quando
   faltar espaço no disco. A situação aparece em Ajustes → Armazenamento; costuma ser concedido quando o
   sistema está instalado como app.
-- Mesmo assim, "Limpar dados de navegação" apaga tudo. Faça **backup** regularmente
-  (Ajustes → Baixar backup) e guarde o arquivo em outro lugar (Google Drive, pen drive).
+- Mesmo assim, "Limpar dados de navegação" apaga tudo. Por isso há **backup automático**.
+
+### Backup automático
+
+Em **Ajustes → Backup automático**, escolha uma pasta uma única vez (Chrome ou Edge no computador).
+A partir daí, alguns segundos depois de cada alteração o sistema grava `backup-recanto-do-cafe-AAAA-MM-DD.json`
+nessa pasta. Fica um arquivo por dia e os **30 mais recentes** são mantidos (só arquivos com esse nome são apagados).
+
+- Escolha uma pasta dentro do **Google Drive para computador** ou do **OneDrive**: assim os backups também vão para a nuvem.
+- Se o navegador pedir a permissão da pasta de novo, aparece uma faixa amarela no topo com o botão **Permitir**.
+- Para recuperar: Ajustes → Restaurar backup → escolha o arquivo do dia desejado.
 
 Versões anteriores usavam o `localStorage` (limite de ~5 MB). Ao abrir esta versão, os dados antigos
 são transferidos automaticamente.
@@ -60,6 +69,7 @@ css/style.css         visual (inclui layout de impressão da comanda)
 js/app.js             inicialização e navegação entre abas
 js/store.js           regras de negócio  ← principal
 js/persistencia.js    gravação dos dados no navegador (IndexedDB)
+js/backupAuto.js      backup automático numa pasta do computador
 js/util.js            formatação de moeda, datas etc.
 js/ui.js              avisos, diálogos e impressão
 js/views/*.js         uma tela por arquivo
