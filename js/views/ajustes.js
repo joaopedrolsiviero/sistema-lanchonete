@@ -11,7 +11,7 @@ export function renderizar(raiz, app) {
       <h1>Ajustes</h1>
 
       <form class="painel" data-form="loja">
-        <h2>Lanchonete</h2>
+        <h2>Estabelecimento</h2>
         <label>Nome (aparece na comanda) <input name="nomeLoja" required value="${esc(estado.config.nomeLoja)}"></label>
         <button type="submit" class="btn primario">Salvar</button>
       </form>
@@ -41,7 +41,7 @@ export function renderizar(raiz, app) {
 
   pagina.querySelector('[data-form="loja"]').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    estado.config.nomeLoja = ev.target.nomeLoja.value.trim() || 'Minha Lanchonete';
+    estado.config.nomeLoja = ev.target.nomeLoja.value.trim() || 'Recanto do Café';
     app.salvar();
     avisar('Nome salvo.');
   });
@@ -52,7 +52,7 @@ export function renderizar(raiz, app) {
       const blob = new Blob([JSON.stringify(estado, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = `backup-lanchonete-${chaveDia()}.json`;
+      a.download = `backup-recanto-do-cafe-${chaveDia()}.json`;
       a.click();
       URL.revokeObjectURL(a.href);
     }

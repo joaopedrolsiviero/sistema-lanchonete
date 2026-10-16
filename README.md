@@ -1,8 +1,8 @@
-# Sistema Lanchonete
+# Recanto do Café — Sistema de Caixa
 
-Sistema de caixa para lanchonete que roda no navegador, **sem servidor e sem mensalidade**.
+Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no navegador, **sem servidor e sem mensalidade**.
 
-- **Caixa (PDV):** monte o pedido tocando nos produtos, adicione observações ("sem cebola"), aplique desconto,
+- **Caixa (PDV):** monte o pedido tocando nos produtos, adicione observações ("sem açúcar", "leite sem lactose"), aplique desconto,
   escolha a forma de pagamento (dinheiro com cálculo de troco, Pix, débito ou crédito) e imprima a comanda.
 - **Cardápio:** categorias, produtos, preços e *ficha técnica* (quais insumos cada produto consome).
 - **Estoque:** insumos com estoque mínimo. A baixa é automática a cada venda, e a venda cancelada devolve os insumos.

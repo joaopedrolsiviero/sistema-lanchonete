@@ -2,7 +2,7 @@
   "name": "sistema-lanchonete",
   "version": "0.1.0",
   "private": true,
-  "description": "Caixa (PDV), cardápio, estoque e relatórios para lanchonete. Roda no navegador, sem servidor.",
+  "description": "Caixa (PDV), cardápio, estoque e relatórios para o Recanto do Café (lanchonete/cafeteria). Roda no navegador, sem servidor.",
   "type": "module",
   "scripts": {
     "start": "python3 -m http.server 8080",

@@ -37,26 +37,24 @@ test('calcularTotais limita o desconto ao subtotal', () => {
 
 test('venda em dinheiro calcula troco e baixa estoque pela ficha técnica', () => {
   const e = estadoExemplo();
-  const paoAntes = insumo(e, 'Pão de hambúrguer').qtd;
-  const baconAntes = insumo(e, 'Bacon').qtd;
-
-  const venda = registrarVenda(e, [itemDe(e, 'X-Bacon', 2), itemDe(e, 'X-Burger')], {
-    pagamento: 'dinheiro', recebido: 10000,
+  const venda = registrarVenda(e, [itemDe(e, 'Cappuccino', 2), itemDe(e, 'Coxinha')], {
+    pagamento: 'dinheiro', recebido: 5000,
   });
 
-  assert.equal(venda.total, 2 * 2200 + 1800);
-  assert.equal(venda.troco, 10000 - 6200);
+  assert.equal(venda.total, 2 * 1000 + 700);
+  assert.equal(venda.troco, 5000 - 2700);
   assert.equal(venda.numero, 1);
-  assert.equal(insumo(e, 'Pão de hambúrguer').qtd, paoAntes - 3);
-  assert.equal(insumo(e, 'Bacon').qtd, baconAntes - 0.1);
+  assert.equal(insumo(e, 'Coxinha').qtd, 29);
+  assert.equal(insumo(e, 'Leite').qtd, 9.7);
+  assert.equal(insumo(e, 'Café em grão').qtd, 1.984);
+  assert.equal(insumo(e, 'Chocolate em pó').qtd, 0.98);
 });
 
 test('dinheiro insuficiente é recusado e não altera nada', () => {
   const e = estadoExemplo();
-  const paoAntes = insumo(e, 'Pão de hambúrguer').qtd;
-  assert.throws(() => registrarVenda(e, [itemDe(e, 'X-Burger')], { pagamento: 'dinheiro', recebido: 1000 }), /menor/);
+  assert.throws(() => registrarVenda(e, [itemDe(e, 'Coxinha')], { pagamento: 'dinheiro', recebido: 500 }), /menor/);
   assert.equal(e.vendas.length, 0);
-  assert.equal(insumo(e, 'Pão de hambúrguer').qtd, paoAntes);
+  assert.equal(insumo(e, 'Coxinha').qtd, 30);
 });
 
 test('exige itens e forma de pagamento', () => {
@@ -77,39 +75,37 @@ test('número do pedido reinicia a cada dia', () => {
 
 test('cancelar devolve o estoque e não pode ser repetido', () => {
   const e = estadoExemplo();
-  const antes = insumo(e, 'Batata congelada').qtd;
-  const v = registrarVenda(e, [itemDe(e, 'Batata frita G', 2)], { pagamento: 'credito' });
-  assert.equal(insumo(e, 'Batata congelada').qtd, antes - 0.8);
+  const v = registrarVenda(e, [itemDe(e, 'Chocolate quente', 2)], { pagamento: 'credito' });
+  assert.equal(insumo(e, 'Leite').qtd, 9.6);
   cancelarVenda(e, v.id);
-  assert.equal(insumo(e, 'Batata congelada').qtd, antes);
+  assert.equal(insumo(e, 'Leite').qtd, 10);
   assert.throws(() => cancelarVenda(e, v.id), /já foi cancelada/);
 });
 
 test('cancelamento usa o consumo da venda, mesmo se a receita mudar depois', () => {
   const e = estadoExemplo();
-  const antes = insumo(e, 'Batata congelada').qtd;
-  const v = registrarVenda(e, [itemDe(e, 'Batata frita P')], { pagamento: 'pix' });
-  const p = e.produtos.find((x) => x.nome === 'Batata frita P');
+  const v = registrarVenda(e, [itemDe(e, 'Café expresso')], { pagamento: 'pix' });
+  const p = e.produtos.find((x) => x.nome === 'Café expresso');
   salvarProduto(e, { ...p, receita: [] });
   cancelarVenda(e, v.id);
-  assert.equal(insumo(e, 'Batata congelada').qtd, antes);
+  assert.equal(insumo(e, 'Café em grão').qtd, 2);
 });
 
 test('resumo ignora vendas canceladas', () => {
   const e = estadoExemplo();
-  registrarVenda(e, [itemDe(e, 'X-Burger', 2)], { pagamento: 'pix' });
+  registrarVenda(e, [itemDe(e, 'Coxinha', 2)], { pagamento: 'pix' });
   registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'dinheiro', recebido: 500 });
-  const c = registrarVenda(e, [itemDe(e, 'X-Bacon')], { pagamento: 'debito' });
+  const c = registrarVenda(e, [itemDe(e, 'Cappuccino')], { pagamento: 'debito' });
   cancelarVenda(e, c.id);
 
   const hoje = chaveDia();
   const r = resumirVendas(vendasNoPeriodo(e, hoje, hoje));
-  assert.equal(r.total, 3600 + 400);
+  assert.equal(r.total, 1400 + 400);
   assert.equal(r.pedidos, 2);
   assert.equal(r.cancelados, 1);
-  assert.equal(r.ticketMedio, 2000);
-  assert.deepEqual(r.porPagamento, { pix: 3600, dinheiro: 400 });
-  assert.equal(r.produtos[0].nome, 'X-Burger');
+  assert.equal(r.ticketMedio, 900);
+  assert.deepEqual(r.porPagamento, { pix: 1400, dinheiro: 400 });
+  assert.equal(r.produtos[0].nome, 'Coxinha');
 });
 
 test('estoque baixo e entrada de mercadoria', () => {
@@ -123,14 +119,20 @@ test('estoque baixo e entrada de mercadoria', () => {
 
 test('remover insumo tira ele das fichas técnicas', () => {
   const e = estadoExemplo();
-  const pao = insumo(e, 'Pão de hambúrguer');
-  removerInsumo(e, pao.id);
-  assert.ok(e.produtos.every((p) => p.receita.every((r) => r.insumoId !== pao.id)));
+  const leite = insumo(e, 'Leite');
+  removerInsumo(e, leite.id);
+  assert.ok(e.produtos.every((p) => p.receita.every((r) => r.insumoId !== leite.id)));
 });
 
 test('não remove categoria com produtos', () => {
   const e = estadoExemplo();
   assert.throws(() => removerCategoria(e, e.categorias[0].id), /produtos/);
+});
+
+test('dados de exemplo são do Recanto do Café', () => {
+  const e = estadoExemplo();
+  assert.equal(e.config.nomeLoja, 'Recanto do Café');
+  assert.deepEqual(e.categorias.map((c) => c.nome), ['Cafés', 'Salgados', 'Doces', 'Bebidas']);
 });
 
 test('salvar e carregar mantém os dados; backup inválido é recusado', () => {

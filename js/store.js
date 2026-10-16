@@ -16,7 +16,7 @@ export const FORMAS_PAGAMENTO = {
 export function estadoVazio() {
   return {
     versao: VERSAO,
-    config: { nomeLoja: 'Minha Lanchonete' },
+    config: { nomeLoja: 'Recanto do Café' },
     categorias: [],
     produtos: [],
     insumos: [],
@@ -38,25 +38,32 @@ export function estadoExemplo() {
     e.produtos.push({ id: gerarId(), nome, categoriaId, preco, ativo: true, receita });
   };
 
-  const lanches = cat('Lanches');
-  const porcoes = cat('Porções');
+  const cafes = cat('Cafés');
+  const salgados = cat('Salgados');
+  const doces = cat('Doces');
   const bebidas = cat('Bebidas');
 
-  const pao = ins('Pão de hambúrguer', 'un', 50, 10);
-  const carne = ins('Hambúrguer 120g', 'un', 40, 10);
-  const queijo = ins('Queijo (fatia)', 'un', 80, 20);
-  const bacon = ins('Bacon', 'kg', 2, 0.5);
-  const batata = ins('Batata congelada', 'kg', 10, 2);
-  const coca = ins('Refrigerante lata', 'un', 48, 12);
-  const suco = ins('Polpa de fruta', 'un', 20, 5);
+  const cafe = ins('Café em grão', 'kg', 2, 0.5);
+  const leite = ins('Leite', 'L', 10, 3);
+  const chocolate = ins('Chocolate em pó', 'kg', 1, 0.2);
+  const coxinha = ins('Coxinha', 'un', 30, 10);
+  const paoDeQueijo = ins('Pão de queijo', 'un', 60, 20);
+  const esfiha = ins('Esfiha', 'un', 20, 6);
+  const bolo = ins('Bolo (fatia)', 'un', 12, 4);
+  const lata = ins('Refrigerante lata', 'un', 24, 6);
+  const polpa = ins('Polpa de fruta', 'un', 20, 5);
 
-  prod('X-Burger', lanches, 1800, [{ insumoId: pao, qtd: 1 }, { insumoId: carne, qtd: 1 }, { insumoId: queijo, qtd: 1 }]);
-  prod('X-Bacon', lanches, 2200, [{ insumoId: pao, qtd: 1 }, { insumoId: carne, qtd: 1 }, { insumoId: queijo, qtd: 1 }, { insumoId: bacon, qtd: 0.05 }]);
-  prod('X-Salada', lanches, 2000, [{ insumoId: pao, qtd: 1 }, { insumoId: carne, qtd: 1 }, { insumoId: queijo, qtd: 1 }]);
-  prod('Batata frita P', porcoes, 1500, [{ insumoId: batata, qtd: 0.2 }]);
-  prod('Batata frita G', porcoes, 2500, [{ insumoId: batata, qtd: 0.4 }]);
-  prod('Refrigerante lata', bebidas, 600, [{ insumoId: coca, qtd: 1 }]);
-  prod('Suco natural', bebidas, 800, [{ insumoId: suco, qtd: 1 }]);
+  prod('Café expresso', cafes, 600, [{ insumoId: cafe, qtd: 0.008 }]);
+  prod('Café coado', cafes, 400, [{ insumoId: cafe, qtd: 0.01 }]);
+  prod('Café com leite', cafes, 700, [{ insumoId: cafe, qtd: 0.008 }, { insumoId: leite, qtd: 0.15 }]);
+  prod('Cappuccino', cafes, 1000, [{ insumoId: cafe, qtd: 0.008 }, { insumoId: leite, qtd: 0.15 }, { insumoId: chocolate, qtd: 0.01 }]);
+  prod('Chocolate quente', cafes, 900, [{ insumoId: leite, qtd: 0.2 }, { insumoId: chocolate, qtd: 0.025 }]);
+  prod('Coxinha', salgados, 700, [{ insumoId: coxinha, qtd: 1 }]);
+  prod('Pão de queijo', salgados, 400, [{ insumoId: paoDeQueijo, qtd: 1 }]);
+  prod('Esfiha', salgados, 650, [{ insumoId: esfiha, qtd: 1 }]);
+  prod('Bolo (fatia)', doces, 800, [{ insumoId: bolo, qtd: 1 }]);
+  prod('Refrigerante lata', bebidas, 600, [{ insumoId: lata, qtd: 1 }]);
+  prod('Suco natural', bebidas, 800, [{ insumoId: polpa, qtd: 1 }]);
   prod('Água', bebidas, 400);
   return e;
 }

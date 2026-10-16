@@ -176,7 +176,7 @@ export function renderizar(raiz, app) {
     }
     if (b.dataset.obs) {
       const item = pedido.itens[b.dataset.obs];
-      const obs = window.prompt(`Observação para ${item.nome} (ex: sem cebola):`, item.obs);
+      const obs = window.prompt(`Observação para ${item.nome} (ex: sem açúcar):`, item.obs);
       if (obs !== null) item.obs = obs.trim();
     }
     renderizarItens();
