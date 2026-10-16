@@ -14,7 +14,7 @@ export function avisar(mensagem, tipo = 'ok') {
 
 /**
  * Abre o diálogo com um formulário. `corpo` é HTML dos campos.
- * `aoSalvar(form)` pode lançar erro para manter o diálogo aberto e exibir a mensagem.
+ * `aoSalvar(form)` (pode ser async) pode lançar erro para manter o diálogo aberto e exibir a mensagem.
  * `aoMontar(form)` permite ligar eventos dinâmicos.
  */
 export function abrirDialogo({ titulo, corpo, textoSalvar = 'Salvar', textoFechar = 'Cancelar', aoSalvar, aoMontar }) {
@@ -32,14 +32,18 @@ export function abrirDialogo({ titulo, corpo, textoSalvar = 'Salvar', textoFecha
   const form = dlg.querySelector('form');
   const erro = form.querySelector('.erro');
   form.querySelector('[data-acao="fechar"]').onclick = () => dlg.close();
-  form.onsubmit = (ev) => {
+  form.onsubmit = async (ev) => {
     ev.preventDefault();
+    const botao = form.querySelector('[type=submit]');
+    botao.disabled = true;
     try {
-      aoSalvar(form);
+      await aoSalvar(form); // pode ser assíncrono (ex.: conferir senha)
       dlg.close();
     } catch (e) {
       erro.textContent = e.message;
       erro.hidden = false;
+    } finally {
+      botao.disabled = false;
     }
   };
   aoMontar?.(form);

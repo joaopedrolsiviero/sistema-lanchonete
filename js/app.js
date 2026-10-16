@@ -3,6 +3,8 @@
 import { insumosEmFalta } from './store.js';
 import { abrirArmazenamento, pedirArmazenamentoPermanente } from './persistencia.js';
 import * as backupAuto from './backupAuto.js';
+import * as acesso from './acesso.js';
+import * as bloqueio from './views/bloqueio.js';
 import { avisar } from './ui.js';
 import { esc } from './util.js';
 import * as pdv from './views/pdv.js';
@@ -41,6 +43,10 @@ function falhaAoGravar(e) {
 function atualizarTopo() {
   document.getElementById('nome-loja').textContent = app.estado.config.nomeLoja;
   document.title = `${app.estado.config.nomeLoja} — Caixa`;
+  // Área do dono: cadeados nas abas protegidas e botão "Bloquear" quando liberada.
+  const comSenha = acesso.temSenha(app.estado);
+  document.body.classList.toggle('area-bloqueada', !acesso.liberado(app.estado));
+  document.getElementById('btn-bloquear').hidden = !(comSenha && acesso.liberado(app.estado));
   const falta = insumosEmFalta(app.estado).length;
   const badge = document.getElementById('badge-estoque');
   badge.hidden = falta === 0;
@@ -58,6 +64,11 @@ function renderizar() {
   });
   const conteudo = document.getElementById('conteudo');
   conteudo.innerHTML = '';
+  atualizarTopo();
+  if (acesso.rotaProtegida(rota) && !acesso.liberado(app.estado)) {
+    bloqueio.renderizar(conteudo, app, renderizar);
+    return;
+  }
   tela.renderizar(conteudo, app);
 }
 
@@ -84,6 +95,11 @@ document.getElementById('faixa-backup').addEventListener('click', (ev) => {
     .catch((e) => avisar(e.message, 'erro'));
 });
 
+document.getElementById('btn-bloquear').addEventListener('click', () => {
+  acesso.bloquear();
+  avisar('Área do dono bloqueada.');
+});
+
 async function iniciar() {
   const conteudo = document.getElementById('conteudo');
   conteudo.innerHTML = '<p class="vazio">Carregando…</p>';
@@ -103,6 +119,11 @@ async function iniciar() {
     return;
   }
 
+  // Ao bloquear (botão ou 5 min sem uso), sai da área do dono se estiver nela.
+  acesso.configurar(() => {
+    atualizarTopo();
+    if (acesso.rotaProtegida(location.hash.slice(1))) renderizar();
+  });
   window.addEventListener('hashchange', renderizar);
   atualizarTopo();
   renderizar();

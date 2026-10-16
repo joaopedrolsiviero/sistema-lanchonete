@@ -14,7 +14,11 @@ Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no 
   Há alerta de reposição.
 - **Relatórios:** faturamento, pedidos, ticket médio, vendas por forma de pagamento, produtos mais vendidos,
   histórico de pedidos e de fechamentos de caixa, cancelamento/reimpressão e exportação para planilha (CSV).
-- **Ajustes:** nome da loja, backup automático numa pasta, backup manual (baixar/restaurar).
+- **Senha do dono:** protege Cardápio, Relatórios e Ajustes (Caixa e Estoque ficam livres). A área bloqueia sozinha
+  após 5 minutos sem uso, no botão "🔒 Bloquear" ou ao fechar o sistema. Um código de recuperação, mostrado ao criar
+  a senha, permite criar uma nova se ela for esquecida. A senha é guardada só como hash (PBKDF2), nunca em texto.
+  Como os dados ficam no navegador, ela impede o acesso comum pela tela, não alguém com conhecimento técnico.
+- **Ajustes:** nome da loja, senha do dono, backup automático numa pasta, backup manual (baixar/restaurar).
 - Funciona **offline** e pode ser instalado como app (PWA).
 
 ## Onde ficam os dados
@@ -75,6 +79,7 @@ js/app.js             inicialização e navegação entre abas
 js/store.js           regras de negócio  ← principal
 js/persistencia.js    gravação dos dados no navegador (IndexedDB)
 js/backupAuto.js      backup automático numa pasta do computador
+js/acesso.js          senha do dono (área protegida)
 js/util.js            formatação de moeda, datas etc.
 js/ui.js              avisos, diálogos e impressão
 js/views/*.js         uma tela por arquivo

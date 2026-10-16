@@ -15,11 +15,12 @@
     <div class="marca"><span class="logo">☕</span> <span id="nome-loja">Recanto do Café</span></div>
     <nav class="abas">
       <a href="#pdv" data-rota="pdv">Caixa</a>
-      <a href="#cardapio" data-rota="cardapio">Cardápio</a>
+      <a href="#cardapio" data-rota="cardapio" class="protegida">Cardápio</a>
       <a href="#estoque" data-rota="estoque">Estoque <span id="badge-estoque" class="badge" hidden></span></a>
-      <a href="#relatorios" data-rota="relatorios">Relatórios</a>
-      <a href="#ajustes" data-rota="ajustes">Ajustes</a>
+      <a href="#relatorios" data-rota="relatorios" class="protegida">Relatórios</a>
+      <a href="#ajustes" data-rota="ajustes" class="protegida">Ajustes</a>
     </nav>
+    <button type="button" id="btn-bloquear" class="btn mini bloquear" hidden title="Bloquear a área do dono">🔒 Bloquear</button>
   </header>
   <div id="faixa-backup" class="faixa-aviso" hidden></div>
 

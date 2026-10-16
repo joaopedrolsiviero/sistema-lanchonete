@@ -1,10 +1,12 @@
-// Tela de ajustes: nome da loja, armazenamento, backup (exportar/importar) e limpeza dos dados.
+// Tela de ajustes: nome da loja, senha do dono, armazenamento, backup (exportar/importar) e limpeza dos dados.
 
 import { esc, chaveDia, formatarDataHora } from '../util.js';
 import { normalizar, estadoVazio, estadoExemplo } from '../store.js';
-import { avisar, confirmar } from '../ui.js';
+import { avisar, confirmar, abrirDialogo } from '../ui.js';
 import { pedirArmazenamentoPermanente, situacaoArmazenamento } from '../persistencia.js';
 import * as backupAuto from '../backupAuto.js';
+import * as acesso from '../acesso.js';
+import { mostrarCodigoRecuperacao } from './bloqueio.js';
 
 function formatarTamanho(bytes) {
   if (bytes == null) return '?';
@@ -23,6 +25,23 @@ export function renderizar(raiz, app) {
         <label>Nome (aparece na comanda) <input name="nomeLoja" required value="${esc(estado.config.nomeLoja)}"></label>
         <button type="submit" class="btn primario">Salvar</button>
       </form>
+
+      <div class="painel" data-painel="senha">
+        <h2>Senha do dono</h2>
+        ${acesso.temSenha(estado) ? `
+          <p><span class="tag ok">ativa</span> Cardápio, Relatórios e Ajustes pedem a senha.
+            Caixa e Estoque continuam livres.</p>
+          <p class="muted">A área fica liberada até clicar em "🔒 Bloquear" no topo, ficar 5 minutos sem uso
+            ou fechar o sistema.</p>
+          <div class="botoes">
+            <button type="button" class="btn" data-acao="trocar-senha">Trocar senha</button>
+            <button type="button" class="btn" data-acao="novo-codigo">Gerar novo código de recuperação</button>
+            <button type="button" class="btn perigo" data-acao="remover-senha">Remover senha</button>
+          </div>` : `
+          <p>Proteja <strong>Cardápio, Relatórios e Ajustes</strong> com uma senha. Assim quem está no caixa
+            não vê o faturamento (importante para a contagem às cegas) nem altera preços.</p>
+          <button type="button" class="btn primario" data-acao="definir-senha">Criar senha do dono</button>`}
+      </div>
 
       <div class="painel" data-painel="armazenamento">
         <h2>Armazenamento</h2>
@@ -131,6 +150,51 @@ export function renderizar(raiz, app) {
     mostrarBackupAuto(s);
   });
 
+  function dialogoSenha({ titulo, textoSalvar, primeiraVez }) {
+    abrirDialogo({
+      titulo,
+      corpo: `
+        <label>Nova senha (mínimo ${acesso.TAMANHO_MINIMO} caracteres)
+          <input type="password" name="nova" required autocomplete="new-password"></label>
+        <label>Repita a senha <input type="password" name="repete" required autocomplete="new-password"></label>
+        ${primeiraVez ? '<p class="muted">Em seguida aparece um código de recuperação para anotar.</p>' : ''}`,
+      textoSalvar,
+      aoSalvar: async (f) => {
+        if (f.nova.value !== f.repete.value) throw new Error('As senhas não são iguais.');
+        const codigo = await acesso.definirSenha(estado, f.nova.value, { novoCodigo: primeiraVez });
+        acesso.desbloquear();
+        app.salvar();
+        avisar(primeiraVez ? 'Senha do dono criada.' : 'Senha trocada.');
+        renderizar(raiz, app);
+        if (codigo) setTimeout(() => mostrarCodigoRecuperacao(codigo), 0);
+      },
+    });
+  }
+
+  async function acaoSenha(acao) {
+    if (acao === 'definir-senha') dialogoSenha({ titulo: 'Criar senha do dono', textoSalvar: 'Criar senha', primeiraVez: true });
+    if (acao === 'trocar-senha') dialogoSenha({ titulo: 'Trocar senha', textoSalvar: 'Trocar senha', primeiraVez: false });
+    if (acao === 'novo-codigo' && confirmar('Gerar um novo código de recuperação? O código atual deixará de valer.')) {
+      abrirDialogo({
+        titulo: 'Novo código de recuperação',
+        corpo: `<label>Confirme a senha atual <input type="password" name="atual" required></label>`,
+        textoSalvar: 'Gerar código',
+        aoSalvar: async (f) => {
+          if (!(await acesso.conferirSenha(estado, f.atual.value))) throw new Error('Senha incorreta.');
+          const codigo = await acesso.definirSenha(estado, f.atual.value, { novoCodigo: true });
+          app.salvar();
+          setTimeout(() => mostrarCodigoRecuperacao(codigo, { substituiu: true }), 0);
+        },
+      });
+    }
+    if (acao === 'remover-senha' && confirmar('Remover a senha do dono? Todas as abas ficarão livres para qualquer pessoa.')) {
+      acesso.removerSenha(estado);
+      app.salvar();
+      avisar('Senha removida.');
+      renderizar(raiz, app);
+    }
+  }
+
   async function acaoBackup(acao) {
     try {
       if (acao === 'escolher-pasta') {
@@ -165,6 +229,7 @@ export function renderizar(raiz, app) {
   pagina.addEventListener('click', (ev) => {
     const acao = ev.target.closest('button')?.dataset.acao;
     if (['escolher-pasta', 'permitir-pasta', 'backup-agora', 'desativar-backup'].includes(acao)) acaoBackup(acao);
+    if (['definir-senha', 'trocar-senha', 'novo-codigo', 'remover-senha'].includes(acao)) acaoSenha(acao);
     if (acao === 'permanente') {
       pedirArmazenamentoPermanente().then((ok) => {
         avisar(ok ? 'Proteção ativada.' : 'O navegador não liberou a proteção agora.', ok ? 'ok' : 'erro');
