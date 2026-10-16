@@ -1,9 +1,11 @@
 // Abertura, sangria/suprimento e fechamento de caixa (usado nas telas Caixa e Relatórios).
+//
+// Contagem às cegas: enquanto o caixa está aberto, o sistema não mostra quanto dinheiro deveria
+// haver na gaveta. Quem fecha conta o dinheiro sem saber o esperado; o resultado (esperado,
+// diferença) só aparece depois que a contagem foi registrada.
 
 import { esc, formatarMoeda, lerMoeda, formatarDataHora, chaveDia } from '../util.js';
-import {
-  FORMAS_PAGAMENTO, TIPOS_MOVIMENTO, abrirCaixa, movimentarCaixa, resumirCaixa, fecharCaixa,
-} from '../store.js';
+import { FORMAS_PAGAMENTO, TIPOS_MOVIMENTO, abrirCaixa, movimentarCaixa, fecharCaixa } from '../store.js';
 import { avisar, abrirDialogo, imprimirFechamento } from '../ui.js';
 
 /** Texto da diferença entre o contado e o esperado. */
@@ -46,12 +48,10 @@ export function renderizarAbertura(raiz, app, aoAbrir) {
 
 /** Barra no topo do caixa: situação do caixa aberto + sangria, suprimento e fechamento. */
 export function montarBarraCaixa(el, app, caixa, aoMudar) {
-  const r = resumirCaixa(app.estado, caixa);
   const deOutroDia = chaveDia(caixa.abertura) !== chaveDia();
   el.innerHTML = `
     <div class="info-caixa">
       <span><strong>Caixa aberto</strong> desde ${formatarDataHora(caixa.abertura)}</span>
-      <span class="muted">Dinheiro na gaveta: <strong>${formatarMoeda(r.dinheiroEsperado)}</strong></span>
       ${deOutroDia ? '<span class="tag aviso">aberto em outro dia — feche e abra um novo</span>' : ''}
     </div>
     <div class="botoes">
@@ -118,35 +118,25 @@ export function htmlResumoCaixa(caixa, r) {
 }
 
 function dialogoFechamento(app, caixa, aoMudar) {
-  const r = resumirCaixa(app.estado, caixa);
   abrirDialogo({
     titulo: 'Fechar caixa',
     corpo: `
       <p class="muted">Aberto em ${formatarDataHora(caixa.abertura)}</p>
-      ${htmlResumoCaixa(caixa, r)}
+      <p>Conte <strong>todo o dinheiro da gaveta</strong> (notas e moedas, incluindo o fundo de troco)
+        e digite o valor abaixo. O resultado aparece depois de confirmar.</p>
       <label>Dinheiro contado na gaveta (R$)
         <input name="contado" inputmode="decimal" placeholder="0,00" required></label>
-      <p class="diferenca destaque"></p>
       <label>Observação (opcional) <input name="obs" maxlength="200"></label>
-      <p class="muted">Depois de fechado, não será possível registrar nem cancelar vendas deste caixa.</p>`,
-    textoSalvar: 'Fechar caixa',
-    aoMontar: (form) => {
-      const saida = form.querySelector('.diferenca');
-      form.contado.addEventListener('input', () => {
-        const contado = lerMoeda(form.contado.value);
-        if (contado == null) { saida.textContent = ''; return; }
-        const dif = contado - r.dinheiroEsperado;
-        saida.textContent = textoDiferenca(dif);
-        saida.className = `diferenca destaque ${dif === 0 ? 'ok' : 'alerta-texto'}`;
-      });
-    },
+      <p class="muted">Depois de fechado, a contagem não pode ser alterada e não será possível
+        registrar nem cancelar vendas deste caixa.</p>`,
+    textoSalvar: 'Confirmar contagem e fechar',
     aoSalvar: (form) => {
       const contado = lerMoeda(form.contado.value);
       if (contado == null) throw new Error('Informe quanto dinheiro foi contado na gaveta.');
       fecharCaixa(app.estado, { contado, obs: form.obs.value });
       app.salvar();
       aoMudar();
-      // abre o resumo depois que este diálogo fechar
+      // abre o resultado depois que este diálogo fechar
       setTimeout(() => dialogoDetalheCaixa(app, caixa, { recemFechado: true }), 0);
     },
   });
@@ -155,14 +145,25 @@ function dialogoFechamento(app, caixa, aoMudar) {
 /** Detalhes de um caixa (fechado ou aberto), com opção de imprimir. */
 export function dialogoDetalheCaixa(app, caixa, { recemFechado = false } = {}) {
   const f = caixa.fechamento;
-  const r = f ? f.resumo : resumirCaixa(app.estado, caixa);
+  if (!f) {
+    // Contagem às cegas: nada de valores enquanto o caixa está aberto.
+    abrirDialogo({
+      titulo: 'Caixa aberto',
+      corpo: `<p class="muted">Aberto em ${formatarDataHora(caixa.abertura)}</p>
+        <p>O resumo e o dinheiro esperado na gaveta aparecem depois do fechamento (contagem às cegas).</p>`,
+      textoFechar: 'Fechar',
+    });
+    return;
+  }
+  const r = f.resumo;
   abrirDialogo({
     titulo: recemFechado ? 'Caixa fechado' : 'Caixa',
     corpo: `
       <p class="muted">Abertura: ${formatarDataHora(caixa.abertura)}<br>
-        Fechamento: ${f ? formatarDataHora(f.data) : 'ainda aberto'}</p>
-      ${f ? `<p class="destaque">Contado: <strong>${formatarMoeda(f.contado)}</strong> · ${textoDiferenca(f.diferenca)}</p>
-             ${f.obs ? `<p>Obs.: ${esc(f.obs)}</p>` : ''}` : ''}
+        Fechamento: ${formatarDataHora(f.data)}</p>
+      <p class="destaque">Contado: <strong>${formatarMoeda(f.contado)}</strong> ·
+        <span class="${f.diferenca === 0 ? 'ok' : 'alerta-texto'}">${textoDiferenca(f.diferenca)}</span></p>
+      ${f.obs ? `<p>Obs.: ${esc(f.obs)}</p>` : ''}
       ${htmlResumoCaixa(caixa, r)}`,
     textoFechar: 'Fechar',
     textoSalvar: 'Imprimir relatório',

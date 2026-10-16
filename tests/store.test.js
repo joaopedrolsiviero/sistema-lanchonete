@@ -196,7 +196,7 @@ test('dinheiro esperado = fundo + vendas em dinheiro + suprimentos − sangrias'
 
 test('sangria não pode passar do dinheiro da gaveta; valores precisam ser positivos', () => {
   const e = exemploAberto(5000);
-  assert.throws(() => movimentarCaixa(e, { tipo: 'sangria', valor: 5001 }), /maior que o dinheiro/);
+  assert.throws(() => movimentarCaixa(e, { tipo: 'sangria', valor: 5001 }), /sangria inválido/);
   assert.throws(() => movimentarCaixa(e, { tipo: 'suprimento', valor: 0 }), /maior que zero/);
   assert.throws(() => movimentarCaixa(e, { tipo: 'outro', valor: 100 }), /inválido/);
   movimentarCaixa(e, { tipo: 'sangria', valor: 5000 });

@@ -261,7 +261,7 @@ export function movimentarCaixa(estado, { tipo, valor, motivo = '' }, agora = ne
   if (!TIPOS_MOVIMENTO[tipo]) throw new Error('Tipo de movimento inválido.');
   if (!(valor > 0)) throw new Error('Informe um valor maior que zero.');
   if (tipo === 'sangria' && valor > resumirCaixa(estado, caixa).dinheiroEsperado) {
-    throw new Error('A sangria é maior que o dinheiro que deveria estar na gaveta.');
+    throw new Error('Valor de sangria inválido: confira o valor digitado.');
   }
   const movimento = { id: gerarId(), tipo, valor, motivo: motivo.trim(), data: new Date(agora).toISOString() };
   caixa.movimentos.push(movimento);
