@@ -87,6 +87,11 @@ const TIPOS = {
   dia: (v) => typeof v === 'string' && RE_DIA.test(v),
   dataHora: (v) => typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v)),
   pagamento: (v) => Object.hasOwn(FORMAS_PAGAMENTO, v),
+  chave: (v) => typeof v === 'string' && /^\d{44}$/.test(v),
+  cpf: (v) => typeof v === 'string' && /^\d{11}$/.test(v),
+  digitos: (v) => typeof v === 'string' && /^\d{1,8}$/.test(v),
+  situacaoNfce: (v) => Object.hasOwn(SITUACOES_NFCE, v),
+  url: (v) => typeof v === 'string' && /^https?:\/\/[^\s"'<>]{1,200}$/.test(v),
   movimento: (v) => Object.hasOwn(TIPOS_MOVIMENTO, v),
   base64: (v) => typeof v === 'string' && /^[A-Za-z0-9+/=]{1,200}$/.test(v),
 };
@@ -117,6 +122,12 @@ function validar(dados) {
 
   if (dados.config != null) {
     conferir(dados.config, { nomeLoja: 'texto?' }, 'configuração');
+    if (dados.config.fiscal != null) {
+      conferir(dados.config.fiscal, { ativo: 'bool?', url: 'url?', token: 'texto?' }, 'configuração fiscal');
+      conferir(dados.config.fiscal.padrao ?? {}, {
+        cfop: 'digitos?', csosn: 'digitos?', cstPis: 'digitos?', cstCofins: 'digitos?',
+      }, 'padrões fiscais');
+    }
     const senha = dados.config.senha;
     if (senha != null) {
       conferir(senha, { sal: 'base64', hash: 'base64', iteracoes: 'inteiro' }, 'senha');
@@ -131,14 +142,27 @@ function validar(dados) {
   conferirLista(dados.insumos, { id: 'id', nome: 'texto', unidade: 'texto', qtd: 'numero', minimo: 'numero' }, 'insumo');
   conferirLista(dados.produtos, {
     id: 'id', nome: 'texto', categoriaId: 'id?', preco: 'centavos', ativo: 'bool?',
-  }, 'produto', (p, onde) => conferirLista(p.receita, { insumoId: 'id', qtd: 'positivo' }, `${onde}, ficha técnica`));
+  }, 'produto', (p, onde) => {
+    conferirLista(p.receita, { insumoId: 'id', qtd: 'positivo' }, `${onde}, ficha técnica`);
+    if (p.fiscal != null) {
+      conferir(p.fiscal, {
+        ncm: 'digitos?', cfop: 'digitos?', csosn: 'digitos?', cstPis: 'digitos?', cstCofins: 'digitos?',
+        cest: 'digitos?', unidade: 'texto?',
+      }, `${onde}, dados fiscais`);
+    }
+  });
 
   conferirLista(dados.vendas, {
     id: 'id', numero: 'inteiro', data: 'dataHora', dia: 'dia', caixaId: 'id?',
     subtotal: 'centavos', desconto: 'centavos', total: 'centavos',
     pagamento: 'pagamento', recebido: 'centavos', troco: 'centavos',
-    cancelada: 'bool', canceladaEm: 'dataHora?',
+    cancelada: 'bool', canceladaEm: 'dataHora?', cpf: 'cpf?',
   }, 'venda', (v, onde) => {
+    if (v.nfce != null) {
+      conferir(v.nfce, {
+        situacao: 'situacaoNfce', chave: 'chave?', numero: 'inteiro?', serie: 'inteiro?', protocolo: 'texto?',
+      }, `${onde}, NFC-e`);
+    }
     if (!Array.isArray(v.itens)) throw new Error(`Dados inválidos: ${onde}, campo "itens".`);
     conferirLista(v.itens, { produtoId: 'id?', nome: 'texto', preco: 'centavos', qtd: 'inteiro', obs: 'texto?' }, `${onde}, item`);
     conferirLista(v.consumo, { insumoId: 'id', qtd: 'numero' }, `${onde}, consumo`);
@@ -204,10 +228,10 @@ function aplicarConsumo(estado, consumo, sinal) {
 }
 
 /**
- * Registra uma venda, dá baixa no estoque e devolve a venda criada.
- * itens: [{produtoId, nome, preco, qtd, obs}]
+ * Confere uma venda sem registrar nada: devolve caixa, totais, valor recebido e troco.
+ * Usada antes de emitir a nota fiscal, para não emitir nota de uma venda que seria recusada.
  */
-export function registrarVenda(estado, itens, { desconto = 0, pagamento, recebido } = {}, agora = new Date()) {
+export function prepararVenda(estado, itens, { desconto = 0, pagamento, recebido } = {}) {
   const caixa = caixaAberto(estado);
   if (!caixa) throw new Error('Abra o caixa antes de registrar vendas.');
   if (!itens.length) throw new Error('O pedido está vazio.');
@@ -223,16 +247,31 @@ export function registrarVenda(estado, itens, { desconto = 0, pagamento, recebid
   } else {
     recebido = totais.total;
   }
+  return { caixa, totais, recebido, troco };
+}
+
+/** Número que o próximo pedido vai receber (a numeração recomeça a cada dia). */
+export function proximoNumeroPedido(estado, agora = new Date()) {
+  return estado.sequencia.dia === chaveDia(agora) ? estado.sequencia.numero + 1 : 1;
+}
+
+/**
+ * Registra uma venda, dá baixa no estoque e devolve a venda criada.
+ * itens: [{produtoId, nome, preco, qtd, obs}]
+ * Opcionais: id (definido antes, quando a nota fiscal é emitida primeiro), cpf e nfce (dados da nota).
+ */
+export function registrarVenda(estado, itens, opcoes = {}, agora = new Date()) {
+  const { pagamento } = opcoes;
+  const { caixa, totais, recebido, troco } = prepararVenda(estado, itens, opcoes);
 
   const dia = chaveDia(agora);
-  if (estado.sequencia.dia !== dia) estado.sequencia = { dia, numero: 0 };
-  estado.sequencia.numero += 1;
+  estado.sequencia = { dia, numero: proximoNumeroPedido(estado, agora) };
 
   const consumo = calcularConsumo(estado, itens);
   aplicarConsumo(estado, consumo, -1);
 
   const venda = {
-    id: gerarId(),
+    id: opcoes.id || gerarId(),
     numero: estado.sequencia.numero,
     data: new Date(agora).toISOString(),
     dia,
@@ -245,6 +284,8 @@ export function registrarVenda(estado, itens, { desconto = 0, pagamento, recebid
     consumo,
     cancelada: false,
   };
+  if (opcoes.cpf) venda.cpf = opcoes.cpf;
+  if (opcoes.nfce) venda.nfce = opcoes.nfce;
   estado.vendas.push(venda);
   return venda;
 }
@@ -294,6 +335,46 @@ export function resumirVendas(vendas) {
     porPagamento,
     produtos: [...produtos.values()].sort((a, b) => b.qtd - a.qtd || b.total - a.total),
   };
+}
+
+// ---------- Nota fiscal (NFC-e) ----------
+
+export const SITUACOES_NFCE = {
+  autorizada: 'Autorizada',
+  contingencia: 'Contingência (aguardando envio)',
+  cancelada: 'Cancelada',
+  denegada: 'Denegada',
+  rejeitada_contingencia: 'Recusada após contingência',
+  pendente_emissao: 'Sem nota (emitir)',
+};
+
+/** Padrões fiscais usados quando o produto não tem o campo preenchido (o contador confirma). */
+export const PADRAO_FISCAL = { cfop: '5102', csosn: '102', cstPis: '49', cstCofins: '49', unidade: 'UN' };
+
+export function fiscalAtivo(estado) {
+  const f = estado.config.fiscal;
+  return Boolean(f?.ativo && f.url && f.token);
+}
+
+/** Dados fiscais efetivos de um produto (os do produto, completados pelos padrões). */
+export function dadosFiscaisProduto(estado, produto) {
+  const padrao = { ...PADRAO_FISCAL, ...(estado.config.fiscal?.padrao || {}) };
+  const f = produto?.fiscal || {};
+  const escolher = (campo) => (f[campo] ? f[campo] : padrao[campo] ?? null);
+  return {
+    ncm: f.ncm || null, cfop: escolher('cfop'), csosn: escolher('csosn'), cstPis: escolher('cstPis'),
+    cstCofins: escolher('cstCofins'), cest: f.cest || null, unidade: escolher('unidade'),
+  };
+}
+
+/** Produtos do pedido sem NCM (a nota não pode ser emitida sem ele). */
+export function produtosSemNcm(estado, itens) {
+  const nomes = new Set();
+  for (const i of itens) {
+    const p = estado.produtos.find((x) => x.id === i.produtoId);
+    if (!dadosFiscaisProduto(estado, p).ncm) nomes.add(i.nome);
+  }
+  return [...nomes];
 }
 
 // ---------- Abertura e fechamento de caixa ----------
@@ -431,9 +512,35 @@ export function salvarProduto(estado, dados) {
     ativo: dados.ativo !== false,
     receita: (dados.receita || []).filter((r) => r.insumoId && r.qtd > 0),
   };
+  const fiscal = limparFiscal(dados.fiscal);
+  if (fiscal) produto.fiscal = fiscal;
+  else if (existente) delete existente.fiscal;
   if (existente) Object.assign(existente, produto);
   else estado.produtos.push(produto);
   return existente || produto;
+}
+
+/** Valida e limpa os dados fiscais digitados no cadastro do produto (só dígitos; campos vazios saem). */
+function limparFiscal(fiscal) {
+  if (!fiscal) return null;
+  const regras = {
+    ncm: [8, 'NCM deve ter 8 dígitos.'], cfop: [4, 'CFOP deve ter 4 dígitos.'], csosn: [3, 'CSOSN deve ter 3 dígitos.'],
+    cstPis: [2, 'CST do PIS deve ter 2 dígitos.'], cstCofins: [2, 'CST da COFINS deve ter 2 dígitos.'],
+    cest: [7, 'CEST deve ter 7 dígitos.'],
+  };
+  const limpo = {};
+  for (const [campo, [tamanho, mensagem]] of Object.entries(regras)) {
+    const v = String(fiscal[campo] ?? '').replace(/\D/g, '');
+    if (!v) continue;
+    if (v.length !== tamanho) throw new Error(mensagem);
+    limpo[campo] = v;
+  }
+  const unidade = String(fiscal.unidade ?? '').trim().toUpperCase();
+  if (unidade) {
+    if (!/^[A-Z0-9]{1,6}$/.test(unidade)) throw new Error('Unidade deve ter até 6 letras/números (ex.: UN).');
+    limpo.unidade = unidade;
+  }
+  return Object.keys(limpo).length ? limpo : null;
 }
 
 export function removerProduto(estado, id) {

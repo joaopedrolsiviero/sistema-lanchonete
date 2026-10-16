@@ -1,8 +1,14 @@
-// Tela do caixa (PDV): monta o pedido, recebe o pagamento e registra a venda.
+// Tela do caixa (PDV): monta o pedido, recebe o pagamento, emite a NFC-e e registra a venda.
 
-import { esc, formatarMoeda, lerMoeda } from '../util.js';
-import { FORMAS_PAGAMENTO, calcularTotais, registrarVenda, caixaAberto } from '../store.js';
-import { avisar, abrirDialogo, imprimirComanda, confirmar } from '../ui.js';
+import { esc, formatarMoeda, lerMoeda, gerarId } from '../util.js';
+import {
+  FORMAS_PAGAMENTO, calcularTotais, registrarVenda, caixaAberto, prepararVenda, fiscalAtivo,
+  produtosSemNcm, proximoNumeroPedido,
+} from '../store.js';
+import {
+  avisar, abrirDialogo, fecharDialogo, imprimirComanda, imprimirNfce, confirmar,
+} from '../ui.js';
+import { emitir, montarPedidoFiscal, resumoNota } from '../fiscal.js';
 import { renderizarAbertura, montarBarraCaixa } from './caixa.js';
 
 // O pedido em andamento fica guardado aqui, então trocar de aba não apaga o pedido.
@@ -11,12 +17,13 @@ const pedido = {
   desconto: 0,
   pagamento: null,
   recebido: null,
+  cpf: '',
   categoria: 'todas',
   busca: '',
 };
 
 function limparPedido() {
-  Object.assign(pedido, { itens: [], desconto: 0, pagamento: null, recebido: null });
+  Object.assign(pedido, { itens: [], desconto: 0, pagamento: null, recebido: null, cpf: '' });
 }
 
 export function renderizar(raiz, app) {
@@ -46,6 +53,11 @@ export function renderizar(raiz, app) {
           </label>
           <div class="linha"><span>Subtotal</span><span class="subtotal"></span></div>
           <div class="linha total"><span>Total</span><span class="valor-total"></span></div>
+          ${fiscalAtivo(app.estado) ? `
+            <label class="linha">CPF na nota (opcional)
+              <input type="text" inputmode="numeric" class="cpf" placeholder="000.000.000-00" maxlength="14"
+                value="${esc(pedido.cpf)}">
+            </label>` : ''}
           <div class="pagamentos">
             ${Object.entries(FORMAS_PAGAMENTO).map(([k, nome]) =>
               `<button type="button" class="btn pag" data-pag="${k}">${nome}</button>`).join('')}
@@ -132,28 +144,110 @@ export function renderizar(raiz, app) {
     renderizarItens();
   }
 
-  function finalizar() {
+  let finalizando = false;
+
+  function opcoesVenda() {
+    return { desconto: pedido.desconto, pagamento: pedido.pagamento, recebido: pedido.recebido ?? undefined };
+  }
+
+  /** Grava a venda (com ou sem nota) e mostra o resumo com a opção de imprimir. */
+  function concluir(extra, nota) {
+    const venda = registrarVenda(app.estado, pedido.itens, { ...opcoesVenda(), ...extra });
+    app.salvar();
+    limparPedido();
+    renderizar(raiz, app);
+    const linhaNota = !nota ? ''
+      : nota.contingencia
+        ? `<p class="aviso-nfce">NFC-e nº ${nota.numero} emitida <strong>em contingência</strong> (sem internet).
+             Ela será enviada à SEFAZ automaticamente quando a conexão voltar.</p>`
+        : `<p class="ok">NFC-e nº ${nota.numero} autorizada.</p>`;
+    abrirDialogo({
+      titulo: `Pedido #${venda.numero} registrado`,
+      corpo: `
+        ${linhaNota}
+        ${extra.nfce?.situacao === 'pendente_emissao'
+          ? '<p class="aviso-nfce">Venda registrada <strong>sem nota fiscal</strong>. Emita a NFC-e em Relatórios assim que o serviço fiscal voltar.</p>'
+          : ''}
+        <p class="destaque">Total: <strong>${formatarMoeda(venda.total)}</strong></p>
+        ${venda.troco ? `<p class="destaque">Troco: <strong>${formatarMoeda(venda.troco)}</strong></p>` : ''}`,
+      textoSalvar: nota ? 'Imprimir NFC-e' : 'Imprimir comanda',
+      textoFechar: 'Fechar',
+      aoSalvar: () => setTimeout(() => (nota
+        ? imprimirNfce(venda, nota)
+        : imprimirComanda(venda, app.estado.config.nomeLoja)), 50),
+    });
+  }
+
+  async function finalizar() {
+    if (finalizando) return;
     try {
-      const venda = registrarVenda(app.estado, pedido.itens, {
-        desconto: pedido.desconto,
-        pagamento: pedido.pagamento,
-        recebido: pedido.recebido ?? undefined,
-      });
-      app.salvar();
-      limparPedido();
-      renderizar(raiz, app);
-      abrirDialogo({
-        titulo: `Pedido #${venda.numero} registrado`,
-        corpo: `
-          <p class="destaque">Total: <strong>${formatarMoeda(venda.total)}</strong></p>
-          ${venda.troco ? `<p class="destaque">Troco: <strong>${formatarMoeda(venda.troco)}</strong></p>` : ''}`,
-        textoSalvar: 'Imprimir comanda',
-        textoFechar: 'Fechar',
-        aoSalvar: () => setTimeout(() => imprimirComanda(venda, app.estado.config.nomeLoja), 50),
-      });
+      prepararVenda(app.estado, pedido.itens, opcoesVenda()); // confere tudo antes de emitir a nota
     } catch (e) {
       avisar(e.message, 'erro');
+      return;
     }
+    if (!fiscalAtivo(app.estado)) {
+      concluir({});
+      return;
+    }
+
+    const cpf = pedido.cpf.replace(/\D/g, '');
+    if (cpf && !cpfValido(cpf)) {
+      avisar('CPF inválido. Corrija ou deixe em branco.', 'erro');
+      return;
+    }
+    const semNcm = produtosSemNcm(app.estado, pedido.itens);
+    if (semNcm.length) {
+      avisar(`Cadastre o NCM no Cardápio antes de vender: ${semNcm.join(', ')}.`, 'erro');
+      return;
+    }
+
+    const { totais, recebido, troco } = prepararVenda(app.estado, pedido.itens, opcoesVenda());
+    const vendaId = gerarId();
+    const pedidoFiscal = montarPedidoFiscal(app.estado, {
+      vendaId, numeroPedido: proximoNumeroPedido(app.estado), itens: pedido.itens,
+      desconto: totais.desconto, pagamento: pedido.pagamento, recebido, troco, cpf,
+    });
+
+    const tentar = async () => {
+      finalizando = true;
+      $('.finalizar').disabled = true;
+      abrirDialogo({ titulo: 'Emitindo NFC-e…', corpo: '<p>Aguarde a autorização da SEFAZ.</p>', bloqueado: true });
+      try {
+        const nota = await emitir(app.estado, pedidoFiscal);
+        fecharDialogo();
+        concluir({ id: vendaId, cpf: cpf || undefined, nfce: resumoNota(nota) }, nota);
+      } catch (e) {
+        fecharDialogo();
+        if (e.tipo === 'rede') {
+          // Serviço fiscal fora do ar: oferece tentar de novo ou registrar a venda para emitir a nota depois.
+          setTimeout(() => abrirDialogo({
+            titulo: 'NFC-e não emitida',
+            corpo: `<p>${esc(e.message)}</p>
+              <p class="muted">"Registrar sem nota" grava a venda; a NFC-e fica pendente e pode ser emitida
+                depois em Relatórios (a mesma venda nunca gera duas notas).</p>
+              <p><button type="button" class="btn" data-acao="sem-nota">Registrar sem nota</button></p>`,
+            textoSalvar: 'Tentar de novo',
+            aoMontar: (form) => form.querySelector('[data-acao="sem-nota"]').addEventListener('click', () => {
+              fecharDialogo();
+              concluir({ id: vendaId, cpf: cpf || undefined, nfce: { situacao: 'pendente_emissao' } });
+            }),
+            aoSalvar: () => setTimeout(tentar, 0),
+          }), 0);
+        } else {
+          setTimeout(() => abrirDialogo({
+            titulo: 'NFC-e recusada',
+            corpo: `<p>${esc(e.message)}</p><p class="muted">A venda não foi registrada. Corrija e finalize de novo.</p>`,
+            textoFechar: 'Fechar',
+          }), 0);
+        }
+      } finally {
+        finalizando = false;
+        const botao = $('.finalizar');
+        if (botao) botao.disabled = !pedido.itens.length;
+      }
+    };
+    await tentar();
   }
 
   // ----- Eventos -----
@@ -194,6 +288,7 @@ export function renderizar(raiz, app) {
   $('.desconto').addEventListener('input', (ev) => { pedido.desconto = lerMoeda(ev.target.value) || 0; atualizarTotais(); });
   $('.recebido').addEventListener('input', (ev) => { pedido.recebido = lerMoeda(ev.target.value); atualizarTotais(); });
   $('.recebido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') finalizar(); });
+  $('.cpf')?.addEventListener('input', (ev) => { pedido.cpf = ev.target.value; });
 
   raiz.querySelector('.pagamentos').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-pag]');
@@ -214,4 +309,14 @@ export function renderizar(raiz, app) {
   renderizarChips();
   renderizarGrade();
   renderizarItens();
+}
+
+function cpfValido(cpf) {
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  for (let t = 9; t < 11; t++) {
+    let soma = 0;
+    for (let i = 0; i < t; i++) soma += Number(cpf[i]) * (t + 1 - i);
+    if (Number(cpf[t]) !== ((10 * soma) % 11) % 10) return false;
+  }
+  return true;
 }

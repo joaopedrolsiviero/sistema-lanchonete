@@ -4,6 +4,8 @@ import { insumosEmFalta } from './store.js';
 import { abrirArmazenamento, pedirArmazenamentoPermanente } from './persistencia.js';
 import * as backupAuto from './backupAuto.js';
 import * as acesso from './acesso.js';
+import * as fiscal from './fiscal.js';
+import { fiscalAtivo } from './store.js';
 import * as bloqueio from './views/bloqueio.js';
 import { avisar } from './ui.js';
 import { esc } from './util.js';
@@ -95,6 +97,35 @@ document.getElementById('faixa-backup').addEventListener('click', (ev) => {
     .catch((e) => avisar(e.message, 'erro'));
 });
 
+/** Envia notas de contingência pendentes e mostra avisos fiscais no topo (a cada 5 minutos). */
+async function verificarFiscal() {
+  const faixa = document.getElementById('faixa-fiscal');
+  if (!fiscalAtivo(app.estado)) {
+    faixa.hidden = true;
+    return;
+  }
+  let html = '';
+  try {
+    const r = await fiscal.sincronizarPendentes(app);
+    const s = r.situacao;
+    const restantes = r.aindaPendentes ?? s.pendentes;
+    if (s.comProblema.length) {
+      html = `<strong>Atenção:</strong> ${s.comProblema.length} NFC-e emitida(s) em contingência foram recusadas pela SEFAZ.
+        <a href="#ajustes">Ver em Ajustes</a>`;
+    } else if (restantes > 0) {
+      html = `${restantes} NFC-e emitida(s) sem internet aguardando envio à SEFAZ (prazo: 24 horas).
+        ${r.erro ? 'O envio será tentado de novo automaticamente.' : ''}`;
+    } else if (s.certificado.diasRestantes < 30) {
+      html = `O certificado digital vence em ${s.certificado.diasRestantes} dias. Providencie a renovação.`;
+    }
+    if (r.autorizadas) avisar(`${r.autorizadas} NFC-e de contingência enviada(s) e autorizada(s).`);
+  } catch (e) {
+    html = `Emissor NFC-e não está respondendo: ${esc(e.message)}`;
+  }
+  faixa.innerHTML = html;
+  faixa.hidden = !html;
+}
+
 document.getElementById('btn-bloquear').addEventListener('click', () => {
   acesso.bloquear();
   avisar('Área do dono bloqueada.');
@@ -125,11 +156,18 @@ async function iniciar() {
     if (acesso.rotaProtegida(location.hash.slice(1))) renderizar();
   });
   window.addEventListener('hashchange', renderizar);
+  // Avisa se a página for fechada antes de o navegador confirmar a última gravação.
+  window.addEventListener('beforeunload', (ev) => {
+    if (app.armazenamento.gravacoesPendentes?.() > 0) ev.preventDefault();
+  });
   atualizarTopo();
   renderizar();
 
   backupAuto.aoMudar(atualizarFaixaBackup);
   backupAuto.iniciar(() => app.estado).catch((e) => console.warn('Backup automático:', e));
+
+  verificarFiscal();
+  setInterval(verificarFiscal, 5 * 60 * 1000);
 
   // Pede ao navegador para não apagar os dados automaticamente.
   pedirArmazenamentoPermanente().catch((e) => console.warn(e));

@@ -5,6 +5,7 @@ import {
   resumirVendas, vendasNoPeriodo, insumosEmFalta, entradaEstoque, salvarProduto,
   removerInsumo, removerCategoria, normalizar,
   abrirCaixa, caixaAberto, movimentarCaixa, resumirCaixa, fecharCaixa,
+  prepararVenda, dadosFiscaisProduto, produtosSemNcm, proximoNumeroPedido, fiscalAtivo,
 } from '../js/store.js';
 import { dividirEstado, juntarEstado } from '../js/persistencia.js';
 import { lerMoeda, chaveDia, somarDias } from '../js/util.js';
@@ -259,4 +260,68 @@ test('campos desconhecidos do backup são descartados', () => {
   const d = JSON.parse(JSON.stringify(estadoExemplo()));
   d.campoEstranho = '<script>';
   assert.equal('campoEstranho' in normalizar(d), false);
+});
+
+// ---------- Nota fiscal (NFC-e) ----------
+
+test('prepararVenda confere sem registrar nada', () => {
+  const e = exemploAberto();
+  const estoqueAntes = insumo(e, 'Coxinha').qtd;
+  const r = prepararVenda(e, [itemDe(e, 'Coxinha', 2)], { pagamento: 'dinheiro', recebido: 2000 });
+  assert.deepEqual([r.totais.total, r.recebido, r.troco], [1400, 2000, 600]);
+  assert.equal(e.vendas.length, 0);
+  assert.equal(insumo(e, 'Coxinha').qtd, estoqueAntes);
+  assert.throws(() => prepararVenda(e, [itemDe(e, 'Coxinha')], { pagamento: 'dinheiro', recebido: 100 }), /menor/);
+});
+
+test('venda guarda id, CPF e dados da NFC-e informados', () => {
+  const e = exemploAberto();
+  assert.equal(proximoNumeroPedido(e), 1);
+  const nfce = { situacao: 'autorizada', chave: '5'.repeat(44), numero: 10, serie: 1, protocolo: '152260000000001' };
+  const v = registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'pix', id: 'idpredefinido', cpf: '52998224725', nfce });
+  assert.equal(v.id, 'idpredefinido');
+  assert.equal(v.cpf, '52998224725');
+  assert.deepEqual(v.nfce, nfce);
+  assert.equal(proximoNumeroPedido(e), 2);
+  normalizar(JSON.parse(JSON.stringify(e))); // continua válido
+});
+
+test('dados fiscais: produto + padrões; produtos sem NCM são apontados', () => {
+  const e = estadoExemplo();
+  const cox = e.produtos.find((p) => p.nome === 'Coxinha');
+  salvarProduto(e, { ...cox, fiscal: { ncm: '1902.20.00', csosn: '500' } });
+  assert.deepEqual(dadosFiscaisProduto(e, cox), {
+    ncm: '19022000', cfop: '5102', csosn: '500', cstPis: '49', cstCofins: '49', cest: null, unidade: 'UN',
+  });
+  e.config.fiscal = { ativo: true, url: 'http://127.0.0.1:8765', token: 'x'.repeat(30), padrao: { cfop: '5405' } };
+  assert.equal(fiscalAtivo(e), true);
+  assert.equal(dadosFiscaisProduto(e, cox).cfop, '5405');
+  assert.deepEqual(produtosSemNcm(e, [itemDe(e, 'Coxinha'), itemDe(e, 'Água')]), ['Água']);
+});
+
+test('dados fiscais inválidos no cadastro são recusados', () => {
+  const e = estadoExemplo();
+  const p = e.produtos[0];
+  assert.throws(() => salvarProduto(e, { ...p, fiscal: { ncm: '123' } }), /NCM/);
+  assert.throws(() => salvarProduto(e, { ...p, fiscal: { cfop: '51020' } }), /CFOP/);
+  assert.throws(() => salvarProduto(e, { ...p, fiscal: { unidade: 'unidade grande' } }), /Unidade/);
+  salvarProduto(e, { ...p, fiscal: { ncm: '', cfop: '' } });
+  assert.equal(e.produtos[0].fiscal, undefined, 'campos vazios não criam dados fiscais');
+});
+
+test('backup com NFC-e ou configuração fiscal adulterada é recusado', () => {
+  const e = exemploAberto();
+  registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'pix', nfce: { situacao: 'autorizada', chave: '1'.repeat(44), numero: 1 } });
+  const base = () => JSON.parse(JSON.stringify(e));
+  const ataques = [
+    (d) => { d.vendas[0].nfce.chave = '<img src=x onerror=alert(1)>'; },
+    (d) => { d.vendas[0].nfce.situacao = 'qualquer'; },
+    (d) => { d.config.fiscal = { url: 'javascript:alert(1)' }; },
+    (d) => { d.produtos[0].fiscal = { ncm: '"><script>' }; },
+  ];
+  for (const atacar of ataques) {
+    const d = base();
+    atacar(d);
+    assert.throws(() => normalizar(d), /inválid/, atacar.toString());
+  }
 });

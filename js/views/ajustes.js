@@ -1,4 +1,4 @@
-// Tela de ajustes: nome da loja, senha do dono, armazenamento, backup (exportar/importar) e limpeza dos dados.
+// Tela de ajustes: nome da loja, senha do dono, nota fiscal, armazenamento, backup e limpeza dos dados.
 
 import { esc, chaveDia, formatarDataHora } from '../util.js';
 import { normalizar, estadoVazio, estadoExemplo } from '../store.js';
@@ -7,6 +7,8 @@ import { pedirArmazenamentoPermanente, situacaoArmazenamento } from '../persiste
 import * as backupAuto from '../backupAuto.js';
 import * as acesso from '../acesso.js';
 import { mostrarCodigoRecuperacao } from './bloqueio.js';
+import { PADRAO_FISCAL, fiscalAtivo } from '../store.js';
+import * as fiscal from '../fiscal.js';
 
 function formatarTamanho(bytes) {
   if (bytes == null) return '?';
@@ -42,6 +44,33 @@ export function renderizar(raiz, app) {
             não vê o faturamento (importante para a contagem às cegas) nem altera preços.</p>
           <button type="button" class="btn primario" data-acao="definir-senha">Criar senha do dono</button>`}
       </div>
+
+      <form class="painel" data-form="fiscal">
+        <h2>Nota fiscal (NFC-e)</h2>
+        <p class="muted">A NFC-e é emitida pelo <strong>Emissor NFC-e</strong>, um programa instalado neste computador
+          (veja o guia de instalação). Aqui você liga o caixa a ele.</p>
+        <label class="check"><input type="checkbox" name="ativo" ${estado.config.fiscal?.ativo ? 'checked' : ''}>
+          Emitir NFC-e em todas as vendas</label>
+        <div class="grade-campos largo">
+          <label>Endereço do emissor <input name="url" value="${esc(estado.config.fiscal?.url || fiscal.URL_PADRAO)}"></label>
+          <label>Token do emissor <input name="token" type="password" autocomplete="off"
+            value="${esc(estado.config.fiscal?.token || '')}" placeholder="o mesmo do config.json do emissor"></label>
+        </div>
+        <details>
+          <summary>Padrões fiscais (usados quando o produto não tem o dado)</summary>
+          <div class="grade-campos">
+            ${[['cfop', 'CFOP'], ['csosn', 'CSOSN'], ['cstPis', 'CST PIS'], ['cstCofins', 'CST COFINS']].map(([c, nome]) => `
+              <label>${nome} <input name="${c}" inputmode="numeric" maxlength="4"
+                value="${esc(estado.config.fiscal?.padrao?.[c] || PADRAO_FISCAL[c])}"></label>`).join('')}
+          </div>
+          <p class="muted">Confirme estes códigos com o contador. O NCM é cadastrado em cada produto (Cardápio).</p>
+        </details>
+        <div class="botoes">
+          <button type="submit" class="btn primario">Salvar</button>
+          <button type="button" class="btn" data-acao="testar-fiscal">Testar conexão</button>
+        </div>
+        <div data-painel="situacao-fiscal"></div>
+      </form>
 
       <div class="painel" data-painel="armazenamento">
         <h2>Armazenamento</h2>
@@ -97,6 +126,106 @@ export function renderizar(raiz, app) {
       Mesmo com ela, "Limpar dados de navegação" apaga tudo — por isso o backup continua importante.</p>`;
   }
   mostrarArmazenamento().catch((e) => console.warn(e));
+
+  // ---------- Nota fiscal ----------
+  const formFiscal = pagina.querySelector('[data-form="fiscal"]');
+  const painelSituacao = pagina.querySelector('[data-painel="situacao-fiscal"]');
+
+  async function mostrarSituacaoFiscal() {
+    painelSituacao.innerHTML = '<p class="muted">Consultando o emissor…</p>';
+    try {
+      const s = await fiscal.situacao(estado, true);
+      const c = s.certificado;
+      const ambiente = s.ambiente === 'producao'
+        ? '<span class="tag ok">PRODUÇÃO</span>'
+        : '<span class="tag aviso">HOMOLOGAÇÃO (testes, sem valor fiscal)</span>';
+      const cert = c.diasRestantes < 30
+        ? `<span class="tag aviso">vence em ${c.diasRestantes} dias</span>` : '<span class="tag ok">válido</span>';
+      painelSituacao.innerHTML = `
+        <table class="tabela">
+          <tr><td>Ambiente</td><td>${ambiente}</td></tr>
+          <tr><td>Emitente</td><td>${esc(s.emitente.razaoSocial)} (${esc(s.emitente.cnpj)}) – ${esc(s.uf)}</td></tr>
+          <tr><td>Certificado</td><td>${esc(c.titular)} ${cert} até ${esc(c.validoAte.split('-').reverse().join('/'))}
+            ${c.confereComEmitente ? '' : '<br><span class="tag perigo">CNPJ do certificado diferente do emitente</span>'}</td></tr>
+          <tr><td>SEFAZ</td><td>${s.sefaz?.online ? '<span class="tag ok">em operação</span>'
+            : `<span class="tag perigo">fora do ar</span> ${esc(s.sefaz?.motivo || '')}`}</td></tr>
+          <tr><td>Série / próximo número</td><td>${s.serie} / ${s.proximoNumero}</td></tr>
+          <tr><td>Aguardando envio</td><td>${s.pendentes
+            ? `<span class="tag aviso">${s.pendentes}</span> <button type="button" class="btn mini" data-acao="transmitir">Enviar agora</button>`
+            : '<span class="tag ok">nenhuma</span>'}</td></tr>
+        </table>
+        ${s.comProblema.length ? `<div class="alerta"><strong>Notas recusadas após contingência</strong> (procure o contador):
+          <ul>${s.comProblema.map((n) => `<li>Nº ${n.numero}: ${esc(n.motivo)}</li>`).join('')}</ul></div>` : ''}
+        <div class="botoes">
+          <label class="linha-mes">XMLs do mês <input type="month" name="mesXml" value="${new Date().toISOString().slice(0, 7)}"></label>
+          <button type="button" class="btn" data-acao="baixar-xml">Baixar .zip para o contador</button>
+        </div>`;
+    } catch (e) {
+      painelSituacao.innerHTML = `<p class="erro">${esc(e.message)}</p>`;
+    }
+  }
+  if (fiscalAtivo(estado)) mostrarSituacaoFiscal();
+
+  formFiscal.addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const f = ev.target;
+    const url = f.url.value.trim().replace(/\/+$/, '') || fiscal.URL_PADRAO;
+    if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(url)) {
+      avisar('O endereço do emissor deve ser deste computador (ex.: http://127.0.0.1:8765).', 'erro');
+      return;
+    }
+    if (f.ativo.checked && f.token.value.trim().length < 24) {
+      avisar('Informe o token do emissor (mínimo 24 caracteres).', 'erro');
+      return;
+    }
+    const padrao = {};
+    for (const [campo, tamanho] of [['cfop', 4], ['csosn', 3], ['cstPis', 2], ['cstCofins', 2]]) {
+      const v = f[campo].value.replace(/\D/g, '');
+      if (v.length !== tamanho) {
+        avisar(`Padrão fiscal inválido: ${campo.toUpperCase()} deve ter ${tamanho} dígitos.`, 'erro');
+        return;
+      }
+      padrao[campo] = v;
+    }
+    estado.config.fiscal = { ativo: f.ativo.checked, url, token: f.token.value.trim(), padrao };
+    app.salvar();
+    avisar('Configuração da nota fiscal salva.');
+    if (estado.config.fiscal.ativo) mostrarSituacaoFiscal();
+  });
+
+  formFiscal.addEventListener('click', async (ev) => {
+    const acao = ev.target.closest('button')?.dataset.acao;
+    if (acao === 'testar-fiscal') {
+      const f = formFiscal;
+      const anterior = estado.config.fiscal;
+      // testa com o que está digitado, sem salvar
+      estado.config.fiscal = { ...(anterior || {}), url: f.url.value.trim() || fiscal.URL_PADRAO, token: f.token.value.trim() };
+      await mostrarSituacaoFiscal();
+      estado.config.fiscal = anterior;
+    }
+    if (acao === 'transmitir') {
+      try {
+        const r = await fiscal.sincronizarPendentes(app);
+        avisar(r?.erro ? r.erro : `${r?.autorizadas || 0} nota(s) enviada(s) e autorizada(s).`, r?.erro ? 'erro' : 'ok');
+      } catch (e) {
+        avisar(e.message, 'erro');
+      }
+      mostrarSituacaoFiscal();
+    }
+    if (acao === 'baixar-xml') {
+      const mes = formFiscal.querySelector('[name="mesXml"]').value;
+      try {
+        const blob = await fiscal.baixarXmlsDoMes(estado, mes);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `nfce-${mes}.zip`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch (e) {
+        avisar(e.message, 'erro');
+      }
+    }
+  });
 
   function mostrarBackupAuto(s = backupAuto.situacao()) {
     const painel = pagina.querySelector('[data-painel="backup-auto"]');

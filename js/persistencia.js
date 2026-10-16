@@ -72,31 +72,46 @@ function concluida(tx) {
 function armazenamentoIndexedDB(db) {
   // Último conteúdo gravado de cada registro (JSON), para regravar só o que mudou.
   const gravado = new Map();
-  // Gravações em fila, uma de cada vez, na ordem em que foram pedidas.
-  let fila = Promise.resolve();
+  // Gravações ainda não confirmadas pelo navegador (para avisar antes de fechar a página).
+  let pendentes = 0;
+  // Se uma gravação completa falhar, a próxima regrava tudo.
+  let forcarTudo = false;
 
   function gravar(estado, { substituirTudo = false } = {}) {
-    // Tira a "foto" dos dados agora; alterações feitas depois não afetam esta gravação.
-    const novos = new Map([...dividirEstado(estado)].map(([k, v]) => [k, JSON.stringify(v)]));
+    try {
+      substituirTudo = substituirTudo || forcarTudo;
+      // Tira a "foto" dos dados agora; alterações feitas depois não afetam esta gravação.
+      const novos = new Map([...dividirEstado(estado)].map(([k, v]) => [k, JSON.stringify(v)]));
 
-    const operacao = fila.then(async () => {
+      // A transação é aberta já, na hora: o IndexedDB aplica as transações na ordem em que foram criadas,
+      // então não é preciso esperar a anterior terminar (e a gravação começa o quanto antes).
       const tx = db.transaction(TABELA, 'readwrite');
       const tabela = tx.objectStore(TABELA);
       if (substituirTudo) tabela.clear();
-      for (const chave of gravado.keys()) {
-        if (!novos.has(chave) && !substituirTudo) tabela.delete(chave);
-      }
+      const removidos = substituirTudo ? [] : [...gravado.keys()].filter((k) => !novos.has(k));
+      for (const chave of removidos) tabela.delete(chave);
       const alterados = [...novos].filter(([k, json]) => substituirTudo || gravado.get(k) !== json);
       for (const [chave, json] of alterados) tabela.put(json, chave);
-      await concluida(tx);
 
+      // Atualiza o registro do que foi gravado já (as próximas gravações comparam com ele).
       if (substituirTudo) gravado.clear();
-      for (const chave of [...gravado.keys()]) if (!novos.has(chave)) gravado.delete(chave);
+      for (const chave of removidos) gravado.delete(chave);
       for (const [chave, json] of alterados) gravado.set(chave, json);
-    });
-    // Se uma gravação falhar, as próximas continuam (e regravam o que ficou pendente).
-    fila = operacao.catch(() => {});
-    return operacao;
+      forcarTudo = false;
+
+      pendentes++;
+      return concluida(tx)
+        .catch((e) => {
+          // Falhou: esquece esses registros para a próxima gravação mandá-los de novo.
+          for (const [chave] of alterados) gravado.delete(chave);
+          if (substituirTudo || removidos.length) forcarTudo = true;
+          throw e;
+        })
+        .finally(() => { pendentes--; });
+    } catch (e) {
+      forcarTudo = true;
+      return Promise.reject(e);
+    }
   }
 
   async function carregar() {
@@ -118,7 +133,7 @@ function armazenamentoIndexedDB(db) {
     return { estado, migrado: Boolean(legado) };
   }
 
-  return { tipo: 'indexeddb', carregar, gravar };
+  return { tipo: 'indexeddb', carregar, gravar, gravacoesPendentes: () => pendentes };
 }
 
 // ---------- Reserva: localStorage (navegadores sem IndexedDB) ----------

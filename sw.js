@@ -1,6 +1,6 @@
 // Service worker: guarda os arquivos do sistema para funcionar sem internet.
 // Ao alterar qualquer arquivo, aumente a versão abaixo para os navegadores baixarem a atualização.
-const VERSAO = 'recanto-v9';
+const VERSAO = 'recanto-v11';
 const ARQUIVOS = [
   './',
   'index.html',
@@ -12,6 +12,7 @@ const ARQUIVOS = [
   'js/persistencia.js',
   'js/backupAuto.js',
   'js/acesso.js',
+  'js/fiscal.js',
   'js/views/pdv.js',
   'js/views/caixa.js',
   'js/views/bloqueio.js',
@@ -40,6 +41,8 @@ self.addEventListener('activate', (ev) => {
 // Rede primeiro (pega atualizações), cache se estiver sem internet.
 self.addEventListener('fetch', (ev) => {
   if (ev.request.method !== 'GET') return;
+  // Só os arquivos do próprio sistema; chamadas ao emissor NFC-e (127.0.0.1) passam direto, sem cache.
+  if (new URL(ev.request.url).origin !== self.location.origin) return;
   ev.respondWith(
     fetch(ev.request)
       .then((resp) => {

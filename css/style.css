@@ -201,6 +201,13 @@ dialog::backdrop { background: rgba(28,25,23,.5); }
 .form-dialogo .destaque { font-size: 1.2rem; }
 fieldset { border: 1px solid var(--borda); border-radius: 8px; padding: .75rem; }
 legend { font-weight: 600; padding: 0 .3rem; }
+.grade-campos { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 0 .6rem; }
+.form-dialogo .ok { color: var(--ok); }
+.grade-campos.largo { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+details summary { cursor: pointer; margin: .5rem 0; color: var(--cor-escura); }
+.linha-mes { display: flex; align-items: center; gap: .5rem; margin: 0; }
+.linha-mes input { width: auto; margin: 0; }
+.aviso-nfce { background: #fffbeb; border: 1px solid #fcd34d; color: #78350f; border-radius: 8px; padding: .5rem .75rem; }
 .linha-receita { display: grid; grid-template-columns: 1fr 80px auto; gap: .4rem; margin-bottom: .4rem; }
 
 .toast {
@@ -239,4 +246,9 @@ legend { font-weight: 600; padding: 0 .3rem; }
   .cupom table { width: 100%; border-collapse: collapse; }
   .cupom td { padding: 1px 0; vertical-align: top; }
   .cupom hr { border: none; border-top: 1px dashed #000; }
+  .cupom.nfce { font-size: 11px; }
+  .cupom .itens-nfce th { font-weight: normal; text-align: left; border-bottom: 1px solid #000; }
+  .cupom .itens-nfce th.dir { text-align: right; }
+  .cupom .chave { font-size: 10px; letter-spacing: .02em; }
+  .cupom .qrcode { width: 34mm; height: 34mm; }
 }

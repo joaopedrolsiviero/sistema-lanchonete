@@ -1,13 +1,16 @@
 // Tela do cardápio: categorias, produtos, preços e ficha técnica (insumos de cada produto).
 
 import { esc, formatarMoeda, lerMoeda, lerNumero, formatarQtd } from '../util.js';
-import { salvarCategoria, removerCategoria, salvarProduto, removerProduto } from '../store.js';
+import {
+  salvarCategoria, removerCategoria, salvarProduto, removerProduto, fiscalAtivo, dadosFiscaisProduto, PADRAO_FISCAL,
+} from '../store.js';
 import { avisar, abrirDialogo, confirmar } from '../ui.js';
 
 export function renderizar(raiz, app) {
   const { estado } = app;
   const nomeCategoria = (id) => estado.categorias.find((c) => c.id === id)?.nome || 'Sem categoria';
   const nomeInsumo = (id) => estado.insumos.find((i) => i.id === id);
+  const comNota = fiscalAtivo(estado);
 
   raiz.innerHTML = `
     <section class="pagina">
@@ -38,7 +41,8 @@ export function renderizar(raiz, app) {
             <tbody>
               ${estado.produtos.map((p) => `
                 <tr class="${p.ativo ? '' : 'inativo'}">
-                  <td>${esc(p.nome)}${p.ativo ? '' : ' <span class="tag">inativo</span>'}</td>
+                  <td>${esc(p.nome)}${p.ativo ? '' : ' <span class="tag">inativo</span>'}
+                    ${comNota && !dadosFiscaisProduto(estado, p).ncm ? ' <span class="tag aviso">sem NCM</span>' : ''}</td>
                   <td>${esc(nomeCategoria(p.categoriaId))}</td>
                   <td class="dir">${formatarMoeda(p.preco)}</td>
                   <td class="muted">${p.receita.map((r) => {
@@ -82,6 +86,8 @@ export function renderizar(raiz, app) {
   }
 
   function dialogoProduto(produto) {
+    const f = produto?.fiscal || {};
+    const padrao = { ...PADRAO_FISCAL, ...(estado.config.fiscal?.padrao || {}) };
     abrirDialogo({
       titulo: produto ? 'Editar produto' : 'Novo produto',
       corpo: `
@@ -102,6 +108,19 @@ export function renderizar(raiz, app) {
           ${estado.insumos.length
             ? '<button type="button" class="btn mini" data-add-linha>+ Insumo</button>'
             : '<p class="muted">Cadastre insumos na aba Estoque para usar a ficha técnica.</p>'}
+        </fieldset>
+        <fieldset class="dados-fiscais">
+          <legend>Dados fiscais (NFC-e)</legend>
+          <p class="muted">Informados pelo contador. Campos em branco usam o padrão de Ajustes → Nota fiscal.</p>
+          <div class="grade-campos">
+            <label>NCM <input name="ncm" inputmode="numeric" maxlength="10" placeholder="8 dígitos" value="${esc(f.ncm || '')}"></label>
+            <label>CFOP <input name="cfop" inputmode="numeric" maxlength="4" placeholder="${esc(padrao.cfop)}" value="${esc(f.cfop || '')}"></label>
+            <label>CSOSN <input name="csosn" inputmode="numeric" maxlength="3" placeholder="${esc(padrao.csosn)}" value="${esc(f.csosn || '')}"></label>
+            <label>CST PIS <input name="cstPis" inputmode="numeric" maxlength="2" placeholder="${esc(padrao.cstPis)}" value="${esc(f.cstPis || '')}"></label>
+            <label>CST COFINS <input name="cstCofins" inputmode="numeric" maxlength="2" placeholder="${esc(padrao.cstCofins)}" value="${esc(f.cstCofins || '')}"></label>
+            <label>CEST <input name="cest" inputmode="numeric" maxlength="9" placeholder="se houver" value="${esc(f.cest || '')}"></label>
+            <label>Unidade <input name="unidade" maxlength="6" placeholder="${esc(padrao.unidade)}" value="${esc(f.unidade || '')}"></label>
+          </div>
         </fieldset>`,
       aoMontar: (form) => {
         form.addEventListener('click', (ev) => {
@@ -125,6 +144,8 @@ export function renderizar(raiz, app) {
           preco,
           ativo: form.ativo.checked,
           receita,
+          fiscal: Object.fromEntries(['ncm', 'cfop', 'csosn', 'cstPis', 'cstCofins', 'cest', 'unidade']
+            .map((campo) => [campo, form[campo].value])),
         });
         atualizar();
         avisar('Produto salvo.');

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- Segurança: só roda código do próprio sistema e não se conecta a nenhum outro site. -->
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Recanto do Café — Caixa</title>
   <meta name="theme-color" content="#6f4129">
@@ -26,6 +26,7 @@
     <button type="button" id="btn-bloquear" class="btn mini bloquear" hidden title="Bloquear a área do dono">🔒 Bloquear</button>
   </header>
   <div id="faixa-backup" class="faixa-aviso" hidden></div>
+  <div id="faixa-fiscal" class="faixa-aviso" hidden></div>
 
   <main id="conteudo"></main>
 
