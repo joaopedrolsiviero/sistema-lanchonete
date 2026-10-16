@@ -45,6 +45,19 @@ nessa pasta. Fica um arquivo por dia e os **30 mais recentes** são mantidos (s�
 Versões anteriores usavam o `localStorage` (limite de ~5 MB). Ao abrir esta versão, os dados antigos
 são transferidos automaticamente.
 
+## Segurança
+
+- **Senha do dono:** mínimo de 8 caracteres, guardada só como hash. A partir do 3º erro seguido, cada tentativa errada
+  dobra o tempo de espera (até 5 minutos), mesmo recarregando a página.
+- **Backups restaurados são validados campo a campo**: arquivos adulterados ou com valores inválidos são recusados,
+  e campos desconhecidos são descartados. Todo texto exibido na tela passa por escape de HTML.
+- **Content Security Policy** (no `index.html`): o navegador só executa o código do próprio sistema e
+  bloqueia conexões com outros sites.
+- **Exportação CSV**: textos que começam com `=`, `+`, `-` ou `@` são neutralizados para não virarem fórmula no Excel.
+- **Limites conhecidos:** os dados no navegador e os arquivos de backup não são criptografados; quem tiver acesso
+  técnico ao computador (ferramentas de desenvolvedor) pode ler ou alterar os dados. Proteja a conta do Windows com
+  senha e ative a **verificação em duas etapas no GitHub**, pois quem controla o repositório controla o sistema publicado.
+
 ## Rodar no computador
 
 Precisa só de Python 3 (ou de qualquer servidor de arquivos estáticos):

@@ -5,6 +5,40 @@ import { avisar, abrirDialogo } from '../ui.js';
 
 const esperar = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
+// Tentativas erradas: a partir da 3ª, cada erro dobra a espera (2 s, 4 s, 8 s… até 5 min).
+// Fica guardado no navegador para não zerar ao recarregar a página.
+const CHAVE_TENTATIVAS = 'recanto:tentativas-senha';
+const ESPERA_MAXIMA_MS = 5 * 60 * 1000;
+
+function lerTentativas() {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_TENTATIVAS)) || { falhas: 0, liberaEm: 0 };
+  } catch {
+    return { falhas: 0, liberaEm: 0 };
+  }
+}
+
+function gravarTentativas(t) {
+  try {
+    if (t) localStorage.setItem(CHAVE_TENTATIVAS, JSON.stringify(t));
+    else localStorage.removeItem(CHAVE_TENTATIVAS);
+  } catch { /* sem localStorage: a espera vale só nesta página */ }
+}
+
+function registrarFalha() {
+  const t = lerTentativas();
+  t.falhas += 1;
+  const espera = t.falhas < 3 ? 0 : Math.min(ESPERA_MAXIMA_MS, 1000 * 2 ** (t.falhas - 2));
+  t.liberaEm = Date.now() + espera;
+  gravarTentativas(t);
+  return espera;
+}
+
+/** Segundos que ainda faltam para poder tentar de novo (0 = pode tentar). */
+function segundosParaTentar() {
+  return Math.max(0, Math.ceil((lerTentativas().liberaEm - Date.now()) / 1000));
+}
+
 export function renderizar(raiz, app, aoLiberar) {
   raiz.innerHTML = `
     <section class="pagina estreita">
@@ -24,15 +58,25 @@ export function renderizar(raiz, app, aoLiberar) {
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const botao = form.querySelector('[type=submit]');
+    const falta = segundosParaTentar();
+    if (falta > 0) {
+      erro.textContent = `Muitas tentativas erradas. Aguarde ${falta} s para tentar de novo.`;
+      erro.hidden = false;
+      return;
+    }
     botao.disabled = true;
     try {
       if (await conferirSenha(app.estado, form.senha.value)) {
+        gravarTentativas(null);
         desbloquear();
         aoLiberar();
         return;
       }
-      await esperar(800); // atrasa tentativas seguidas
-      erro.textContent = 'Senha incorreta.';
+      const espera = registrarFalha();
+      await esperar(800);
+      erro.textContent = espera
+        ? `Senha incorreta. Aguarde ${Math.ceil(espera / 1000)} s para tentar de novo.`
+        : 'Senha incorreta.';
       erro.hidden = false;
       form.senha.select();
     } finally {
@@ -54,7 +98,16 @@ export function renderizar(raiz, app, aoLiberar) {
       textoSalvar: 'Criar nova senha',
       aoSalvar: async (f) => {
         if (f.nova.value !== f.repete.value) throw new Error('As senhas não são iguais.');
-        const codigoNovo = await recuperarComCodigo(app.estado, f.codigo.value, f.nova.value);
+        const falta = segundosParaTentar();
+        if (falta > 0) throw new Error(`Muitas tentativas erradas. Aguarde ${falta} s.`);
+        let codigoNovo;
+        try {
+          codigoNovo = await recuperarComCodigo(app.estado, f.codigo.value, f.nova.value);
+        } catch (e) {
+          if (/incorreto/.test(e.message)) registrarFalha();
+          throw e;
+        }
+        gravarTentativas(null);
         app.salvar();
         desbloquear();
         avisar('Senha alterada.');

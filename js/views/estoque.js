@@ -34,9 +34,9 @@ export function renderizar(raiz, app) {
                   <td>${i.qtd < 0 ? '<span class="tag perigo">negativo</span>'
                     : falta ? '<span class="tag aviso">baixo</span>' : '<span class="tag ok">ok</span>'}</td>
                   <td class="dir nowrap">
-                    <button type="button" class="btn mini primario" data-entrada="${i.id}">+ Entrada</button>
-                    <button type="button" class="btn mini" data-editar="${i.id}">Editar</button>
-                    <button type="button" class="btn mini perigo" data-remover="${i.id}">Remover</button>
+                    <button type="button" class="btn mini primario" data-entrada="${esc(i.id)}">+ Entrada</button>
+                    <button type="button" class="btn mini" data-editar="${esc(i.id)}">Editar</button>
+                    <button type="button" class="btn mini perigo" data-remover="${esc(i.id)}">Remover</button>
                   </td>
                 </tr>`;
               }).join('') || '<tr><td colspan="5" class="vazio">Nenhum insumo cadastrado.</td></tr>'}

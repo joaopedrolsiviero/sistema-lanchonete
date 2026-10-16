@@ -69,18 +69,103 @@ export function estadoExemplo() {
 }
 
 // ---------- Validação ----------
+//
+// Tudo que vem de fora (backup restaurado) ou do armazenamento é conferido campo a campo antes de ser usado.
+// Isso impede que um arquivo adulterado coloque código ou valores absurdos no sistema.
+
+const RE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const RE_DIA = /^\d{4}-\d{2}-\d{2}$/;
+
+const TIPOS = {
+  id: (v) => typeof v === 'string' && RE_ID.test(v),
+  texto: (v) => typeof v === 'string' && v.length <= 500,
+  numero: (v) => typeof v === 'number' && Number.isFinite(v),
+  inteiro: (v) => Number.isSafeInteger(v),
+  centavos: (v) => Number.isSafeInteger(v) && v >= 0,
+  positivo: (v) => typeof v === 'number' && Number.isFinite(v) && v > 0,
+  bool: (v) => typeof v === 'boolean',
+  dia: (v) => typeof v === 'string' && RE_DIA.test(v),
+  dataHora: (v) => typeof v === 'string' && v.length <= 40 && !Number.isNaN(Date.parse(v)),
+  pagamento: (v) => Object.hasOwn(FORMAS_PAGAMENTO, v),
+  movimento: (v) => Object.hasOwn(TIPOS_MOVIMENTO, v),
+  base64: (v) => typeof v === 'string' && /^[A-Za-z0-9+/=]{1,200}$/.test(v),
+};
+
+/** Confere um objeto contra um esquema { campo: 'tipo' } ('tipo?' = opcional). */
+function conferir(obj, esquema, onde) {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) throw new Error(`Dados inválidos: ${onde}.`);
+  for (const [campo, regra] of Object.entries(esquema)) {
+    const opcional = regra.endsWith('?');
+    const valor = obj[campo];
+    if (opcional && valor == null) continue;
+    if (!TIPOS[regra.replace('?', '')](valor)) throw new Error(`Dados inválidos: ${onde}, campo "${campo}".`);
+  }
+}
+
+function conferirLista(lista, esquema, onde, extra) {
+  if (lista == null) return;
+  if (!Array.isArray(lista)) throw new Error(`Dados inválidos: ${onde}.`);
+  lista.forEach((item, i) => {
+    const local = `${onde} nº ${i + 1}`;
+    conferir(item, esquema, local);
+    extra?.(item, local);
+  });
+}
+
+function validar(dados) {
+  if (!dados || typeof dados !== 'object' || Array.isArray(dados)) throw new Error('Arquivo inválido.');
+
+  if (dados.config != null) {
+    conferir(dados.config, { nomeLoja: 'texto?' }, 'configuração');
+    const senha = dados.config.senha;
+    if (senha != null) {
+      conferir(senha, { sal: 'base64', hash: 'base64', iteracoes: 'inteiro' }, 'senha');
+      if (senha.recuperacao != null) {
+        conferir(senha.recuperacao, { sal: 'base64', hash: 'base64', iteracoes: 'inteiro' }, 'código de recuperação');
+      }
+    }
+  }
+  if (dados.sequencia != null) conferir(dados.sequencia, { dia: 'dia?', numero: 'inteiro' }, 'sequência de pedidos');
+
+  conferirLista(dados.categorias, { id: 'id', nome: 'texto' }, 'categoria');
+  conferirLista(dados.insumos, { id: 'id', nome: 'texto', unidade: 'texto', qtd: 'numero', minimo: 'numero' }, 'insumo');
+  conferirLista(dados.produtos, {
+    id: 'id', nome: 'texto', categoriaId: 'id?', preco: 'centavos', ativo: 'bool?',
+  }, 'produto', (p, onde) => conferirLista(p.receita, { insumoId: 'id', qtd: 'positivo' }, `${onde}, ficha técnica`));
+
+  conferirLista(dados.vendas, {
+    id: 'id', numero: 'inteiro', data: 'dataHora', dia: 'dia', caixaId: 'id?',
+    subtotal: 'centavos', desconto: 'centavos', total: 'centavos',
+    pagamento: 'pagamento', recebido: 'centavos', troco: 'centavos',
+    cancelada: 'bool', canceladaEm: 'dataHora?',
+  }, 'venda', (v, onde) => {
+    if (!Array.isArray(v.itens)) throw new Error(`Dados inválidos: ${onde}, campo "itens".`);
+    conferirLista(v.itens, { produtoId: 'id?', nome: 'texto', preco: 'centavos', qtd: 'inteiro', obs: 'texto?' }, `${onde}, item`);
+    conferirLista(v.consumo, { insumoId: 'id', qtd: 'numero' }, `${onde}, consumo`);
+  });
+
+  conferirLista(dados.caixas, { id: 'id', abertura: 'dataHora', fundo: 'centavos' }, 'caixa', (c, onde) => {
+    if (!Array.isArray(c.movimentos)) throw new Error(`Dados inválidos: ${onde}, campo "movimentos".`);
+    conferirLista(c.movimentos, { id: 'id', tipo: 'movimento', valor: 'centavos', motivo: 'texto?', data: 'dataHora' }, `${onde}, movimento`);
+    const f = c.fechamento;
+    if (f == null) return;
+    conferir(f, { data: 'dataHora', contado: 'centavos', diferenca: 'inteiro', obs: 'texto?' }, `${onde}, fechamento`);
+    conferir(f.resumo, {
+      pedidos: 'inteiro', cancelados: 'inteiro', total: 'centavos', descontos: 'centavos?',
+      suprimentos: 'centavos', sangrias: 'centavos', dinheiroEsperado: 'inteiro',
+    }, `${onde}, resumo do fechamento`);
+    conferir(f.resumo.porPagamento, Object.fromEntries(Object.keys(FORMAS_PAGAMENTO).map((k) => [k, 'centavos?'])),
+      `${onde}, resumo por pagamento`);
+  });
+}
 
 /** Valida e completa um objeto de dados (usado ao carregar e ao importar backup). */
 export function normalizar(dados) {
-  if (!dados || typeof dados !== 'object') throw new Error('Arquivo inválido.');
-  const listas = ['categorias', 'produtos', 'insumos', 'vendas', 'caixas'];
-  for (const l of listas) {
-    if (dados[l] !== undefined && !Array.isArray(dados[l])) throw new Error(`Campo "${l}" inválido.`);
-  }
+  validar(dados);
   const base = estadoVazio();
+  // Só os campos conhecidos são aproveitados; qualquer outra coisa no arquivo é descartada.
   return {
-    ...base,
-    ...dados,
+    versao: base.versao,
     config: { ...base.config, ...(dados.config || {}) },
     sequencia: { ...base.sequencia, ...(dados.sequencia || {}) },
     categorias: dados.categorias || [],

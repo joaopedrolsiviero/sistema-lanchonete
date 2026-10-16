@@ -8,7 +8,7 @@
 // do navegador consegue mexer neles. A senha impede o acesso comum pela tela, não um ataque técnico.
 
 export const ROTAS_PROTEGIDAS = ['cardapio', 'relatorios', 'ajustes'];
-export const TAMANHO_MINIMO = 4;
+export const TAMANHO_MINIMO = 8;
 const ITERACOES = 150000;
 const INATIVIDADE_MS = 5 * 60 * 1000;
 const ALFABETO_CODIGO = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem 0/O, 1/I, para não confundir

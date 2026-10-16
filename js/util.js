@@ -81,3 +81,17 @@ export function formatarDia(chave) {
   const [a, m, d] = chave.split('-');
   return `${d}/${m}/${a}`;
 }
+
+/**
+ * Monta um CSV (separado por ";" e com BOM, para abrir direto no Excel em português).
+ * Células de texto que começam com = + - @ (ou tab/enter) ganham um apóstrofo na frente,
+ * para o Excel/Sheets não executarem como fórmula ("injeção de fórmula").
+ */
+export function gerarCsv(linhas) {
+  const celula = (valor) => {
+    let s = String(valor ?? '');
+    if (typeof valor === 'string' && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+    return `"${s.replace(/"/g, '""')}"`;
+  };
+  return '\ufeff' + linhas.map((l) => l.map(celula).join(';')).join('\r\n');
+}

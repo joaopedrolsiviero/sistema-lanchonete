@@ -225,3 +225,38 @@ test('vendas antigas (sem caixa) continuam podendo ser canceladas', () => {
   cancelarVenda(e, v.id);
   assert.equal(v.cancelada, true);
 });
+
+// ---------- Segurança: backup adulterado e exportação CSV ----------
+
+test('backup adulterado é recusado', () => {
+  const valido = () => {
+    const e = exemploAberto();
+    registrarVenda(e, [itemDe(e, 'Água')], { pagamento: 'pix' });
+    return JSON.parse(JSON.stringify(e));
+  };
+  normalizar(valido()); // o original passa
+
+  const ataques = [
+    (d) => { d.vendas[0].numero = '<img src=x onerror=alert(1)>'; },
+    (d) => { d.vendas[0].id = '"><script>alert(1)</script>'; },
+    (d) => { d.produtos[0].id = 'x" onclick="alert(1)'; },
+    (d) => { d.vendas[0].pagamento = 'bitcoin'; },
+    (d) => { d.vendas[0].total = -500; },
+    (d) => { d.vendas[0].itens[0].preco = 'grátis'; },
+    (d) => { d.insumos[0].qtd = 'muito'; },
+    (d) => { d.caixas[0].fundo = 1.5; },
+    (d) => { d.config.nomeLoja = { html: '<b>' }; },
+    (d) => { d.vendas[0].itens = 'nada'; },
+  ];
+  for (const atacar of ataques) {
+    const d = valido();
+    atacar(d);
+    assert.throws(() => normalizar(d), /inválid/, atacar.toString());
+  }
+});
+
+test('campos desconhecidos do backup são descartados', () => {
+  const d = JSON.parse(JSON.stringify(estadoExemplo()));
+  d.campoEstranho = '<script>';
+  assert.equal('campoEstranho' in normalizar(d), false);
+});

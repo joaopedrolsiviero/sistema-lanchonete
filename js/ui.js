@@ -61,7 +61,7 @@ export function imprimirComanda(venda, nomeLoja) {
   area.innerHTML = `
     <div class="cupom">
       <h1>${esc(nomeLoja)}</h1>
-      <p class="centro">Pedido <strong>#${venda.numero}</strong><br>${formatarDataHora(venda.data)}</p>
+      <p class="centro">Pedido <strong>#${esc(venda.numero)}</strong><br>${formatarDataHora(venda.data)}</p>
       ${venda.cancelada ? '<p class="centro"><strong>*** CANCELADO ***</strong></p>' : ''}
       <hr>
       <table>

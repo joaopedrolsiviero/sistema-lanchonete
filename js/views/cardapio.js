@@ -24,8 +24,8 @@ export function renderizar(raiz, app) {
         <div class="lista-categorias">
           ${estado.categorias.map((c) => `
             <span class="tag">${esc(c.nome)}
-              <button type="button" class="btn link mini" data-editar-cat="${c.id}">editar</button>
-              <button type="button" class="btn link mini perigo" data-remover-cat="${c.id}">×</button>
+              <button type="button" class="btn link mini" data-editar-cat="${esc(c.id)}">editar</button>
+              <button type="button" class="btn link mini perigo" data-remover-cat="${esc(c.id)}">×</button>
             </span>`).join('') || '<p class="muted">Nenhuma categoria.</p>'}
         </div>
       </div>
@@ -46,8 +46,8 @@ export function renderizar(raiz, app) {
                     return i ? `${formatarQtd(r.qtd)} ${esc(i.unidade)} ${esc(i.nome)}` : '';
                   }).filter(Boolean).join(', ') || '—'}</td>
                   <td class="dir nowrap">
-                    <button type="button" class="btn mini" data-editar="${p.id}">Editar</button>
-                    <button type="button" class="btn mini perigo" data-remover="${p.id}">Remover</button>
+                    <button type="button" class="btn mini" data-editar="${esc(p.id)}">Editar</button>
+                    <button type="button" class="btn mini perigo" data-remover="${esc(p.id)}">Remover</button>
                   </td>
                 </tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum produto cadastrado.</td></tr>'}
             </tbody>
@@ -74,7 +74,7 @@ export function renderizar(raiz, app) {
       <div class="linha-receita">
         <select name="insumo">
           <option value="">— insumo —</option>
-          ${estado.insumos.map((i) => `<option value="${i.id}" ${i.id === r.insumoId ? 'selected' : ''}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join('')}
+          ${estado.insumos.map((i) => `<option value="${esc(i.id)}" ${i.id === r.insumoId ? 'selected' : ''}>${esc(i.nome)} (${esc(i.unidade)})</option>`).join('')}
         </select>
         <input name="qtdInsumo" inputmode="decimal" placeholder="qtd" value="${r.qtd != null ? formatarQtd(r.qtd) : ''}">
         <button type="button" class="btn mini perigo" data-remover-linha>×</button>
@@ -89,7 +89,7 @@ export function renderizar(raiz, app) {
         <label>Categoria
           <select name="categoria">
             <option value="">Sem categoria</option>
-            ${estado.categorias.map((c) => `<option value="${c.id}" ${c.id === produto?.categoriaId ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
+            ${estado.categorias.map((c) => `<option value="${esc(c.id)}" ${c.id === produto?.categoriaId ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
           </select>
         </label>
         <label>Preço (R$) <input name="preco" inputmode="decimal" required placeholder="0,00"

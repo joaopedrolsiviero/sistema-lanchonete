@@ -68,7 +68,7 @@ export function renderizar(raiz, app) {
   function renderizarChips() {
     const cats = [{ id: 'todas', nome: 'Todos' }, ...app.estado.categorias];
     $('.chips').innerHTML = cats.map((c) =>
-      `<button type="button" class="chip ${pedido.categoria === c.id ? 'ativo' : ''}" data-cat="${c.id}">${esc(c.nome)}</button>`,
+      `<button type="button" class="chip ${pedido.categoria === c.id ? 'ativo' : ''}" data-cat="${esc(c.id)}">${esc(c.nome)}</button>`,
     ).join('');
   }
 
@@ -80,7 +80,7 @@ export function renderizar(raiz, app) {
       && (!termo || p.nome.toLowerCase().includes(termo)));
     $('.grade').innerHTML = produtos.length
       ? produtos.map((p) => `
-          <button type="button" class="produto" data-id="${p.id}">
+          <button type="button" class="produto" data-id="${esc(p.id)}">
             <span class="nome">${esc(p.nome)}</span>
             <span class="preco">${formatarMoeda(p.preco)}</span>
           </button>`).join('')

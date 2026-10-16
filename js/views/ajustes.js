@@ -157,6 +157,8 @@ export function renderizar(raiz, app) {
         <label>Nova senha (mínimo ${acesso.TAMANHO_MINIMO} caracteres)
           <input type="password" name="nova" required autocomplete="new-password"></label>
         <label>Repita a senha <input type="password" name="repete" required autocomplete="new-password"></label>
+        <p class="muted">Use uma senha difícil de adivinhar, misturando letras e números
+          (evite datas, telefone ou "12345678").</p>
         ${primeiraVez ? '<p class="muted">Em seguida aparece um código de recuperação para anotar.</p>' : ''}`,
       textoSalvar,
       aoSalvar: async (f) => {

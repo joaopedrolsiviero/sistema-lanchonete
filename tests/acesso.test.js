@@ -27,27 +27,27 @@ test('senha não é guardada em texto e é conferida corretamente', async () => 
 });
 
 test('senha curta é recusada', async () => {
-  await assert.rejects(definirSenha(estadoExemplo(), '123'), /pelo menos 4/);
+  await assert.rejects(definirSenha(estadoExemplo(), 'cafe123'), /pelo menos 8/);
 });
 
 test('código de recuperação cria senha nova e é trocado', async () => {
   const e = estadoExemplo();
-  const codigo = await definirSenha(e, 'antiga1');
+  const codigo = await definirSenha(e, 'antiga01');
   // aceita minúsculas e sem hífens
   assert.equal(await conferirCodigo(e, codigo.toLowerCase().replace(/-/g, ' ')), true);
-  await assert.rejects(recuperarComCodigo(e, 'AAAA-BBBB-CCCC', 'nova123'), /incorreto/);
-  const novoCodigo = await recuperarComCodigo(e, codigo, 'nova123');
-  assert.equal(await conferirSenha(e, 'nova123'), true);
-  assert.equal(await conferirSenha(e, 'antiga1'), false);
+  await assert.rejects(recuperarComCodigo(e, 'AAAA-BBBB-CCCC', 'nova1234'), /incorreto/);
+  const novoCodigo = await recuperarComCodigo(e, codigo, 'nova1234');
+  assert.equal(await conferirSenha(e, 'nova1234'), true);
+  assert.equal(await conferirSenha(e, 'antiga01'), false);
   assert.notEqual(novoCodigo, codigo);
   assert.equal(await conferirCodigo(e, codigo), false); // o antigo deixa de valer
 });
 
 test('trocar senha mantém o código de recuperação; remover libera tudo', async () => {
   const e = estadoExemplo();
-  const codigo = await definirSenha(e, 'primeira');
-  assert.equal(await definirSenha(e, 'segunda', { novoCodigo: false }), null);
-  assert.equal(await conferirSenha(e, 'segunda'), true);
+  const codigo = await definirSenha(e, 'primeira1');
+  assert.equal(await definirSenha(e, 'segunda12', { novoCodigo: false }), null);
+  assert.equal(await conferirSenha(e, 'segunda12'), true);
   assert.equal(await conferirCodigo(e, codigo), true);
   removerSenha(e);
   assert.equal(temSenha(e), false);

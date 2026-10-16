@@ -1,6 +1,6 @@
 // Tela de relatórios: faturamento, formas de pagamento, produtos mais vendidos e histórico de pedidos.
 
-import { esc, formatarMoeda, chaveDia, somarDias, formatarDataHora, formatarDia } from '../util.js';
+import { esc, formatarMoeda, chaveDia, somarDias, formatarDataHora, formatarDia, gerarCsv } from '../util.js';
 import { FORMAS_PAGAMENTO, vendasNoPeriodo, resumirVendas, cancelarVenda } from '../store.js';
 import { avisar, abrirDialogo, imprimirComanda, confirmar } from '../ui.js';
 import { dialogoDetalheCaixa, textoDiferenca } from './caixa.js';
@@ -32,8 +32,7 @@ function baixarCsv(vendas, de, ate) {
       v.cancelada ? 'Cancelada' : 'OK',
     ]);
   }
-  // Ponto e vírgula + BOM: abre direto no Excel em português.
-  const csv = '﻿' + linhas.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+  const csv = gerarCsv(linhas);
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
   a.download = `vendas_${de}_a_${ate}.csv`;
@@ -120,7 +119,7 @@ export function renderizar(raiz, app) {
                   <td class="dir">${f ? formatarMoeda(f.resumo.dinheiroEsperado) : '—'}</td>
                   <td class="dir">${f ? formatarMoeda(f.contado) : '—'}</td>
                   <td>${f ? `<span class="tag ${f.diferenca === 0 ? 'ok' : 'perigo'}">${textoDiferenca(f.diferenca)}</span>` : ''}</td>
-                  <td class="dir"><button type="button" class="btn mini" data-caixa="${c.id}">Ver</button></td>
+                  <td class="dir"><button type="button" class="btn mini" data-caixa="${esc(c.id)}">Ver</button></td>
                 </tr>`;
               }).join('') || '<tr><td colspan="7" class="vazio">Nenhum caixa aberto no período.</td></tr>'}
             </tbody>
@@ -136,14 +135,14 @@ export function renderizar(raiz, app) {
             <tbody>
               ${vendas.map((v) => `
                 <tr class="${v.cancelada ? 'cancelada' : ''}">
-                  <td>${v.numero}</td>
+                  <td>${esc(v.numero)}</td>
                   <td class="nowrap">${formatarDataHora(v.data)}</td>
                   <td>${v.itens.map((i) => `${i.qtd}x ${esc(i.nome)}`).join(', ')}</td>
                   <td>${FORMAS_PAGAMENTO[v.pagamento]}</td>
                   <td class="dir">${formatarMoeda(v.total)}${v.cancelada ? ' <span class="tag perigo">cancelado</span>' : ''}</td>
                   <td class="dir nowrap">
-                    <button type="button" class="btn mini" data-ver="${v.id}">Ver</button>
-                    ${v.cancelada || caixaFechado(v) ? '' : `<button type="button" class="btn mini perigo" data-cancelar="${v.id}">Cancelar</button>`}
+                    <button type="button" class="btn mini" data-ver="${esc(v.id)}">Ver</button>
+                    ${v.cancelada || caixaFechado(v) ? '' : `<button type="button" class="btn mini perigo" data-cancelar="${esc(v.id)}">Cancelar</button>`}
                   </td>
                 </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum pedido no período.</td></tr>'}
             </tbody>
