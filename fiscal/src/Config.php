@@ -87,16 +87,36 @@ final class Config
         }
     }
 
+    /**
+     * Procura a configuração, nesta ordem:
+     *  1. variável de ambiente RECANTO_FISCAL_CONFIG (usada nos testes automáticos);
+     *  2. config.json na pasta acima do serviço (instalação no Windows: C:\RecantoFiscal\config.json,
+     *     fora da pasta do programa, para as atualizações não mexerem nela);
+     *  3. config/config.json dentro do serviço.
+     */
     public static function carregar(string $baseDir): self
     {
-        // RECANTO_FISCAL_CONFIG permite apontar outro arquivo (usado nos testes automáticos).
-        $arquivo = getenv('RECANTO_FISCAL_CONFIG') ?: $baseDir . '/config/config.json';
-        if (!is_file($arquivo)) {
-            throw new ErroConfiguracao('Arquivo config/config.json não encontrado. Copie config/config.exemplo.json e preencha.');
+        $candidatos = array_filter([
+            getenv('RECANTO_FISCAL_CONFIG') ?: null,
+            dirname($baseDir) . '/config.json',
+            $baseDir . '/config/config.json',
+        ]);
+        $arquivo = null;
+        foreach ($candidatos as $c) {
+            if (is_file($c)) {
+                $arquivo = $c;
+                break;
+            }
         }
-        $dados = json_decode((string) file_get_contents($arquivo), true);
+        if ($arquivo === null) {
+            throw new ErroConfiguracao('Arquivo config.json não encontrado. Rode o instalador ou copie config/config.exemplo.json.');
+        }
+        // O Bloco de Notas às vezes grava um BOM no início; o json_decode não aceita.
+        $texto = preg_replace('/^\xEF\xBB\xBF/', '', (string) file_get_contents($arquivo));
+        $dados = json_decode($texto, true);
         if (!is_array($dados)) {
-            throw new ErroConfiguracao('config/config.json não é um JSON válido: ' . json_last_error_msg());
+            throw new ErroConfiguracao("$arquivo não é um JSON válido (" . json_last_error_msg()
+                . '). Confira vírgulas e aspas.');
         }
         return new self($dados, $baseDir);
     }

@@ -520,10 +520,24 @@ final class Emissor
             if (!is_file($arquivo)) {
                 throw new ErroConfiguracao("Certificado digital não encontrado em: $arquivo");
             }
+            while (openssl_error_string() !== false) {
+                // limpa erros antigos do OpenSSL para ler só os desta tentativa
+            }
             try {
                 $cert = Certificate::readPfx((string) file_get_contents($arquivo), $this->config->certificadoSenha);
             } catch (\Throwable $e) {
-                throw new ErroConfiguracao('Não foi possível abrir o certificado (senha errada ou arquivo inválido).');
+                $detalhes = $e->getMessage() . ' '; // a biblioteca já inclui o erro do OpenSSL na mensagem
+                while (($erro = openssl_error_string()) !== false) {
+                    $detalhes .= $erro . ' ';
+                }
+                if (str_contains($detalhes, 'unsupported')) {
+                    // Arquivo .pfx em formato antigo (criptografia RC2/3DES), que o OpenSSL 3 não abre.
+                    throw new ErroConfiguracao('O certificado está num formato antigo que este PHP não abre. '
+                        . 'Exporte de novo pelo Windows (certmgr.msc → Pessoal → Certificados → botão direito → '
+                        . 'Todas as Tarefas → Exportar → "Sim, exportar a chave privada" → criptografia AES256-SHA256) '
+                        . 'e aponte o config.json para o novo arquivo.');
+                }
+                throw new ErroConfiguracao('Não foi possível abrir o certificado: confira a senha e o arquivo .pfx.');
             }
             if ($cert->isExpired()) {
                 throw new ErroConfiguracao('O certificado digital venceu em ' . $cert->getValidTo()->format('d/m/Y') . '. Renove-o.');

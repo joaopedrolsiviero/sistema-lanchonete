@@ -18,6 +18,10 @@ Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no 
   após 5 minutos sem uso, no botão "🔒 Bloquear" ou ao fechar o sistema. Um código de recuperação, mostrado ao criar
   a senha, permite criar uma nova se ela for esquecida. A senha é guardada só como hash (PBKDF2), nunca em texto.
   Como os dados ficam no navegador, ela impede o acesso comum pela tela, não alguém com conhecimento técnico.
+- **Nota fiscal (NFC-e):** emissão automática ao finalizar cada venda pelo **Emissor NFC-e**, um serviço local
+  (PHP + [sped-nfe](https://github.com/nfephp-org/sped-nfe)) que roda no computador do caixa — sem mensalidade.
+  Contingência offline quando a internet cai, envio automático das pendentes, cancelamento, CPF na nota,
+  cupom DANFE NFC-e com QR Code e XMLs guardados por ano/mês. Instalação: [fiscal/INSTALACAO.md](fiscal/INSTALACAO.md).
 - **Ajustes:** nome da loja, senha do dono, backup automático numa pasta, backup manual (baixar/restaurar).
 - Funciona **offline** e pode ser instalado como app (PWA).
 
@@ -80,7 +84,8 @@ Abra http://localhost:8080.
 ## Testes
 
 ```bash
-npm test
+npm test              # regras do caixa
+npm run test:fiscal   # emissor NFC-e (precisa de PHP e `composer install` em fiscal/)
 ```
 
 ## Estrutura
@@ -93,6 +98,8 @@ js/store.js           regras de negócio  ← principal
 js/persistencia.js    gravação dos dados no navegador (IndexedDB)
 js/backupAuto.js      backup automático numa pasta do computador
 js/acesso.js          senha do dono (área protegida)
+js/fiscal.js          comunicação com o Emissor NFC-e local
+fiscal/                Emissor NFC-e (PHP): src/, public/index.php, instalador/, testes
 js/util.js            formatação de moeda, datas etc.
 js/ui.js              avisos, diálogos e impressão
 js/views/*.js         uma tela por arquivo

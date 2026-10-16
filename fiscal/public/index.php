@@ -37,10 +37,10 @@ function responder(int $status, mixed $corpo): never
     exit;
 }
 
-function registrarErro(Throwable $e): void
+function registrarErro(Throwable $e, string $pastaDados): void
 {
     $linha = sprintf("[%s] %s: %s em %s:%d\n", date('c'), get_class($e), $e->getMessage(), $e->getFile(), $e->getLine());
-    @file_put_contents(dirname(__DIR__) . '/dados/erros.log', $linha, FILE_APPEND);
+    @file_put_contents($pastaDados . '/erros.log', $linha, FILE_APPEND);
 }
 
 $metodo = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -118,10 +118,10 @@ try {
     responder(404, ['erro' => 'Rota não encontrada.']);
 } catch (ErroFiscal $e) {
     if ($e->http >= 500) {
-        registrarErro($e);
+        registrarErro($e, $config->pastaDados);
     }
     responder($e->http, ['erro' => $e->getMessage()] + $e->extra);
 } catch (Throwable $e) {
-    registrarErro($e);
+    registrarErro($e, $config->pastaDados);
     responder(500, ['erro' => 'Erro interno do serviço fiscal: ' . $e->getMessage()]);
 }
