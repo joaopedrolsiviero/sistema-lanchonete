@@ -1,0 +1,5 @@
+vendor/
+dados/
+config/config.json
+*.pfx
+*.p12

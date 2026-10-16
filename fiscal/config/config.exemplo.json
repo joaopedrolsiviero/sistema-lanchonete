@@ -1,0 +1,36 @@
+{
+    "ambiente": 2,
+    "token": "TROQUE-POR-UM-TEXTO-ALEATORIO-COM-PELO-MENOS-24-CARACTERES",
+    "origensPermitidas": ["https://joaopedrolsiviero.github.io"],
+    "emitente": {
+        "cnpj": "00.000.000/0001-00",
+        "ie": "000000000",
+        "razaoSocial": "RAZAO SOCIAL DA EMPRESA LTDA",
+        "nomeFantasia": "Recanto do Café",
+        "crt": 1,
+        "email": "email@empresa.com.br",
+        "endereco": {
+            "logradouro": "Rua Exemplo",
+            "numero": "100",
+            "complemento": "",
+            "bairro": "Centro",
+            "codigoMunicipio": 5208707,
+            "municipio": "Goiania",
+            "uf": "GO",
+            "cep": "74000-000",
+            "telefone": "(62) 99999-0000"
+        }
+    },
+    "certificado": {
+        "arquivo": "C:/RecantoFiscal/certificado.pfx",
+        "senha": "SENHA-DO-CERTIFICADO"
+    },
+    "csc": {
+        "id": "000001",
+        "codigo": "CODIGO-CSC-GERADO-NO-PORTAL-DA-SEFAZ-GO"
+    },
+    "serie": 1,
+    "pastaXml": "C:/Users/SEU-USUARIO/OneDrive/Recanto do Cafe/NFC-e",
+    "pastaDados": "dados",
+    "timeoutSefaz": 10
+}

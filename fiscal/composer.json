@@ -1,0 +1,29 @@
+{
+    "name": "recanto/servico-fiscal",
+    "description": "Serviço local de emissão de NFC-e do Recanto do Café (usa nfephp-org/sped-nfe).",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.1",
+        "ext-curl": "*",
+        "ext-dom": "*",
+        "ext-openssl": "*",
+        "ext-pdo_sqlite": "*",
+        "ext-zip": "*",
+        "nfephp-org/sped-nfe": "^5.2",
+        "chillerlan/php-qrcode": "^5.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Recanto\\Fiscal\\": "src/"
+        },
+        "files": [
+            "src/compat.php",
+            "src/Erros.php"
+        ]
+    },
+    "config": {
+        "platform-check": false,
+        "sort-packages": true
+    }
+}
