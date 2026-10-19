@@ -125,7 +125,7 @@ exit($faltando ? 2 : 0);
         [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
         $token = ([BitConverter]::ToString($bytes) -replace '-', '').ToLower()
         $pastaXml = if ($env:OneDrive) { Join-Path $env:OneDrive 'Recanto do Cafe\NFC-e' } else { Join-Path $Pasta 'xml' }
-        $c = Get-Content (Join-Path $PastaApp 'config\config.exemplo.json') -Raw | ConvertFrom-Json
+        $c = Get-Content (Join-Path $PastaApp 'config\config.exemplo.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         $c.token = $token
         $c.certificado.arquivo = ($Pasta + '\certificado.pfx') -replace '\\', '/'
         $c.pastaXml = $pastaXml -replace '\\', '/'
@@ -184,7 +184,7 @@ exit($faltando ? 2 : 0);
     $lnk.Save()
     Ok 'Atalhos criados.'
 
-    $token = (Get-Content $Config -Raw | ConvertFrom-Json).token
+    $token = (Get-Content $Config -Raw -Encoding UTF8 | ConvertFrom-Json).token
     try {
         $s = Invoke-RestMethod -Uri "http://127.0.0.1:$Porta/situacao" -Headers @{ 'X-Token' = $token } -TimeoutSec 15
         Ok "Emissor funcionando: ambiente $($s.ambiente), certificado de $($s.certificado.titular), válido até $($s.certificado.validoAte)."
