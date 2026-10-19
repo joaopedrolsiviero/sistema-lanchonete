@@ -38,6 +38,16 @@ function GravarUtf8($caminho, $texto) {
     # UTF-8 sem BOM (o PowerShell 5 grava com BOM por padrão)
     [IO.File]::WriteAllText($caminho, $texto, (New-Object Text.UTF8Encoding $false))
 }
+function Aspas($texto) { '"' + $texto + '"' }
+function Executar($programa, $argumentos, $pasta = $Pasta, $saida = $null) {
+    # Roda programas externos com Start-Process, e não com "& programa": no PowerShell 5 do Windows,
+    # o "&" tira as aspas dos argumentos e transforma qualquer texto do programa em stderr num erro fatal.
+    $opcoes = @{ FilePath = $programa; ArgumentList = $argumentos; WorkingDirectory = $pasta
+                 NoNewWindow = $true; Wait = $true; PassThru = $true }
+    if ($saida) { $opcoes.RedirectStandardOutput = $saida; $opcoes.RedirectStandardError = "$saida.err" }
+    $p = Start-Process @opcoes
+    return $p.ExitCode
+}
 
 try {
     if (-not [Environment]::Is64BitOperatingSystem) { throw 'Este instalador precisa do Windows 64 bits.' }
@@ -74,11 +84,19 @@ try {
         Baixar $VcRedist $vc
         Start-Process -FilePath $vc -ArgumentList '/install', '/quiet', '/norestart' -Verb RunAs -Wait
     }
-    & $php -v *> $null
-    if ($LASTEXITCODE -ne 0) { throw 'O PHP não conseguiu iniciar. Reinicie o computador e rode o instalador de novo.' }
-    Ok ((& $php -r 'echo "PHP " . PHP_VERSION;') + ' instalado.')
-    $faltando = & $php -r 'foreach (["curl","openssl","pdo_sqlite","soap","zip","dom","mbstring"] as $e) if (!extension_loaded($e)) echo "$e ";'
-    if ($faltando) { throw "Extensões do PHP faltando: $faltando" }
+    $verificar = Join-Path $Temp 'verificar.php'
+    GravarUtf8 $verificar @'
+<?php
+$faltando = array_filter(['curl', 'openssl', 'pdo_sqlite', 'soap', 'zip', 'dom', 'mbstring'], fn($e) => !extension_loaded($e));
+echo $faltando ? 'Extensões do PHP faltando: ' . implode(', ', $faltando) : 'PHP ' . PHP_VERSION . ' instalado.';
+exit($faltando ? 2 : 0);
+'@
+    $resultado = Join-Path $Temp 'verificar.txt'
+    $codigo = Executar $php @((Aspas $verificar)) $Temp $resultado
+    $texto = if (Test-Path $resultado) { (Get-Content $resultado -Raw -Encoding UTF8) } else { '' }
+    if ($codigo -eq 2) { throw $texto }
+    if ($codigo -ne 0) { throw 'O PHP não conseguiu iniciar. Reinicie o computador e rode o instalador de novo.' }
+    Ok $texto
 
     # ---------------------------------------------------------------- programa do emissor
     Passo 'Baixando o programa do emissor...'
@@ -94,11 +112,9 @@ try {
     Passo 'Instalando as bibliotecas (sped-nfe)...'
     $composerPhar = Join-Path $Temp 'composer.phar'
     Baixar $Composer $composerPhar
-    Push-Location $PastaApp
-    try {
-        & $php $composerPhar install --no-dev --no-interaction --no-progress --optimize-autoloader 2>&1 | Out-Host
-        if ($LASTEXITCODE -ne 0) { throw 'Falha ao instalar as bibliotecas com o Composer.' }
-    } finally { Pop-Location }
+    $codigo = Executar $php @((Aspas $composerPhar), 'install', '--no-dev', '--no-interaction', '--no-progress',
+                              '--optimize-autoloader') $PastaApp
+    if ($codigo -ne 0) { throw 'Falha ao instalar as bibliotecas com o Composer.' }
     Ok 'Programa instalado.'
 
     # ---------------------------------------------------------------- configuração (só na primeira vez)
@@ -121,8 +137,9 @@ try {
     # Só o usuário atual (e o sistema) podem ler a pasta: ela guarda a senha do certificado.
     # SIDs fixos (*S-1-5-18 = Sistema, *S-1-5-32-544 = Administradores) funcionam em Windows de qualquer idioma.
     $usuario = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    & icacls $Pasta /inheritance:r /grant:r "*$($usuario):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' *> $null
-    if ($LASTEXITCODE -ne 0) { Aviso 'Não foi possível restringir as permissões da pasta (o emissor funciona mesmo assim).' }
+    $codigo = Executar 'icacls.exe' @((Aspas $Pasta), '/inheritance:r', '/grant:r', "*$($usuario):(OI)(CI)F",
+                                      '*S-1-5-18:(OI)(CI)F', '*S-1-5-32-544:(OI)(CI)F') $Pasta (Join-Path $Temp 'icacls.txt')
+    if ($codigo -ne 0) { Aviso 'Não foi possível restringir as permissões da pasta (o emissor funciona mesmo assim).' }
 
     # ---------------------------------------------------------------- iniciar com o Windows + atalhos
     Passo 'Iniciando o emissor...'
