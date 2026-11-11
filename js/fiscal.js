@@ -18,7 +18,10 @@ export class ErroFiscal extends Error {
 
 async function chamar(estado, metodo, caminho, corpo, { tempo = TEMPO_PADRAO_MS, binario = false } = {}) {
   const { url, token } = estado.config.fiscal || {};
-  if (!url || !token) throw new ErroFiscal('Serviço fiscal não configurado (Ajustes → Nota fiscal).', 'servico');
+  if (!url) throw new ErroFiscal('Serviço fiscal não configurado: preencha o endereço do emissor em Ajustes → Nota fiscal.', 'servico');
+  if (!token) {
+    throw new ErroFiscal('Falta o token: copie o "token" do arquivo config.json do emissor e cole em Ajustes → Nota fiscal.', 'servico');
+  }
   const controle = new AbortController();
   const timer = setTimeout(() => controle.abort(), tempo);
   let resposta;
