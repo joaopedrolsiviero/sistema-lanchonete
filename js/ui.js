@@ -187,5 +187,7 @@ export function imprimirNfce(venda, nota) {
       ${nota.qrCodeImagem ? `<p class="centro"><img class="qrcode" src="${esc(nota.qrCodeImagem)}" alt="QR Code da NFC-e"></p>` : ''}
       <p class="centro"><small>Pedido #${esc(venda.numero)}</small></p>
     </div>`;
-  window.print();
+  // Espera o QR Code carregar: imprimindo na hora, a imagem ainda não existe e sai em branco.
+  const imagens = [...area.querySelectorAll('img')].map((img) => img.decode().catch(() => {}));
+  return Promise.all(imagens).then(() => window.print());
 }
