@@ -15,6 +15,7 @@ use NFePHP\Common\Soap\SoapInterface;
  *   duplicidade → cStat 204
  *   paralisada  → lote com cStat 108 (serviço paralisado)
  *   sem_rede    → lança exceção de comunicação (como internet caída/timeout)
+ *   erro999     → (consulta, evento ou inutilização) responde 999 "Erro não catalogado"
  * Consultas por chave respondem "não consta" (217) a menos que a chave tenha sido autorizada aqui.
  */
 final class SefazSimulada extends SoapBase implements SoapInterface
@@ -49,6 +50,13 @@ final class SefazSimulada extends SoapBase implements SoapInterface
         if (($this->modos[0] ?? null) === 'sem_rede') {
             array_shift($this->modos);
             throw new SoapException('Could not resolve host');
+        }
+        if (($this->modos[0] ?? null) === 'erro999') {
+            array_shift($this->modos);
+            $raiz = ['consulta' => 'retConsSitNFe', 'evento' => 'retEnvEvento', 'inutilizacao' => 'retInutNFe'][$tipo]
+                ?? 'retConsStatServ';
+            $corpo = '<tpAmb>2</tpAmb><verAplic>SIM</verAplic><cStat>999</cStat><xMotivo>Rejeicao: Erro nao catalogado</xMotivo>';
+            return $this->ret($raiz, $tipo === 'inutilizacao' ? "<infInut>$corpo</infInut>" : $corpo);
         }
         return match ($tipo) {
             'consulta' => $this->consulta($request),

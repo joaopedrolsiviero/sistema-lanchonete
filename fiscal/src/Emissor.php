@@ -211,7 +211,8 @@ final class Emissor
                     $resultado['incertasResolvidas']++;
                 } catch (\Throwable $e) {
                     $this->banco->resolverIncerta($incerta['chave'], 'erro', $e->getMessage());
-                    $resultado['erro'] = 'Falha ao conferir nota incerta: ' . $e->getMessage();
+                    $resultado['erro'] = 'Nota pendente ainda não resolvida: ' . $e->getMessage()
+                        . '. O sistema tenta de novo sozinho a cada 5 minutos.';
                     break;
                 }
             }
@@ -245,6 +246,12 @@ final class Emissor
             $this->banco->resolverIncerta($incerta['chave'], 'cancelada', 'Já estava cancelada.');
             return;
         }
+        if ($cStat !== '217') {
+            // Só 217 ("não consta") garante que o número está livre. Qualquer outra resposta (ex.: 999, erro
+            // genérico da SEFAZ) não diz nada sobre a nota: fica pendente e tenta de novo na próxima rodada.
+            throw new ErroFiscal(sprintf('a consulta da nota nº %d na SEFAZ falhou (%s - %s)',
+                $incerta['numero'], $cStat, (string) ($consulta->xMotivo ?? '')), 502);
+        }
         // Não consta na SEFAZ: inutiliza o número para não deixar buraco na sequência.
         $resposta = $tools->sefazInutiliza(
             (int) $incerta['serie'], (int) $incerta['numero'], (int) $incerta['numero'],
@@ -253,7 +260,8 @@ final class Emissor
         $ret = (new Standardize($resposta))->toStd();
         $cStatInut = (string) ($ret->infInut->cStat ?? $ret->cStat ?? '');
         if ($cStatInut !== '102' && $cStatInut !== '563') { // 563 = já inutilizado
-            throw new ErroSefaz($cStatInut, (string) ($ret->infInut->xMotivo ?? $ret->xMotivo ?? ''));
+            throw new ErroFiscal(sprintf('a inutilização do nº %d na SEFAZ falhou (%s - %s)', $incerta['numero'],
+                $cStatInut, (string) ($ret->infInut->xMotivo ?? $ret->xMotivo ?? '')), 502);
         }
         $this->arquivos->salvar(
             $this->arquivos->caminho($criado, sprintf('inutilizacao-serie%d-num%d.xml', $incerta['serie'], $incerta['numero'])),

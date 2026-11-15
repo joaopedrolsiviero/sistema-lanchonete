@@ -241,9 +241,18 @@ teste('SEFAZ paralisada: contingência reaproveitando o número', function () us
 });
 
 teste('internet volta: transmite as pendentes e inutiliza o número incerto', function () use ($emissor, $sefaz, $banco, $config) {
-    $sefaz->modos = ['autoriza', 'autoriza'];
+    // Consulta da tentativa incerta com erro genérico (999): não inutiliza, fica pendente para a próxima rodada.
+    $sefaz->modos = ['autoriza', 'autoriza', 'erro999'];
+    $sefaz->chamadas = [];
     $r = $emissor->transmitirPendentes();
     igual(2, $r['autorizadas']);
+    igual(0, $r['incertasResolvidas']);
+    igual(1, $r['aindaPendentes']);
+    verdade(str_contains((string) $r['erro'], 'consulta da nota nº 4') && str_contains((string) $r['erro'], '999'), (string) $r['erro']);
+    verdade(!in_array('inutilizacao', $sefaz->chamadas, true), 'não inutiliza sem a SEFAZ confirmar que a nota não existe');
+
+    $r = $emissor->transmitirPendentes();
+    igual(0, $r['autorizadas']);
     igual(1, $r['incertasResolvidas']);
     igual(0, $r['aindaPendentes']);
     igual(null, $r['erro']);
