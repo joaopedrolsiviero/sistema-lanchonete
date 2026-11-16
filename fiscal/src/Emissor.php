@@ -52,6 +52,28 @@ final class Emissor
         $this->fuso = new DateTimeZone('America/Sao_Paulo'); // Goiás: UTC-3
     }
 
+    private ?SoapInterface $soapCliente = null;
+
+    /**
+     * Guarda a última conversa com a SEFAZ (pedido e resposta SOAP completos) em <pastaDados>/diagnostico,
+     * para investigar recusas genéricas como o 999. Não contém senhas: só o XML assinado e a resposta.
+     */
+    private function guardarDiagnostico(string $nome): void
+    {
+        $soap = $this->soapCliente;
+        if ($soap === null) {
+            return;
+        }
+        $pasta = $this->config->pastaDados . '/diagnostico';
+        if (!is_dir($pasta) && !@mkdir($pasta, 0700, true)) {
+            return;
+        }
+        $texto = "=== PEDIDO ===\n" . ($soap->requestBody ?? '') . "\n\n=== RESPOSTA (cabeçalho) ===\n"
+            . ($soap->responseHead ?? '') . "\n\n=== RESPOSTA ===\n" . ($soap->responseBody ?? '')
+            . "\n\n=== ERRO SOAP ===\n" . ($soap->soaperror ?? '') . "\n";
+        @file_put_contents(sprintf('%s/%s-%s.txt', $pasta, date('Ymd-His'), $nome), $texto);
+    }
+
     // ------------------------------------------------------------------ emissão
 
     public function emitir(mixed $dados): array
@@ -247,6 +269,7 @@ final class Emissor
             return;
         }
         if ($cStat !== '217') {
+            $this->guardarDiagnostico('consulta-nota-' . $incerta['numero']);
             // Só 217 ("não consta") garante que o número está livre. Qualquer outra resposta (ex.: 999, erro
             // genérico da SEFAZ) não diz nada sobre a nota: fica pendente e tenta de novo na próxima rodada.
             throw new ErroFiscal(sprintf('a consulta da nota nº %d na SEFAZ falhou (%s - %s)',
@@ -260,6 +283,7 @@ final class Emissor
         $ret = (new Standardize($resposta))->toStd();
         $cStatInut = (string) ($ret->infInut->cStat ?? $ret->cStat ?? '');
         if ($cStatInut !== '102' && $cStatInut !== '563') { // 563 = já inutilizado
+            $this->guardarDiagnostico('inutilizacao-' . $incerta['numero']);
             throw new ErroFiscal(sprintf('a inutilização do nº %d na SEFAZ falhou (%s - %s)', $incerta['numero'],
                 $cStatInut, (string) ($ret->infInut->xMotivo ?? $ret->xMotivo ?? '')), 502);
         }
@@ -514,6 +538,7 @@ final class Emissor
             $tools->model(65);
             $tools->setVerAplic(self::VERSAO_APP);
             $soap = $this->soap ?? new SoapCurl($cert);
+            $this->soapCliente = $soap;
             $soap->timeout($this->config->timeoutSefaz);
             $tools->loadSoapClass($soap);
             $this->tools = $tools;

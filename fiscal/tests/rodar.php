@@ -250,6 +250,7 @@ teste('internet volta: transmite as pendentes e inutiliza o número incerto', fu
     igual(1, $r['aindaPendentes']);
     verdade(str_contains((string) $r['erro'], 'consulta da nota nº 4') && str_contains((string) $r['erro'], '999'), (string) $r['erro']);
     verdade(!in_array('inutilizacao', $sefaz->chamadas, true), 'não inutiliza sem a SEFAZ confirmar que a nota não existe');
+    verdade(count(glob($config->pastaDados . '/diagnostico/*-consulta-nota-4.txt')) === 1, 'guarda o diagnóstico da consulta');
 
     $r = $emissor->transmitirPendentes();
     igual(0, $r['autorizadas']);
