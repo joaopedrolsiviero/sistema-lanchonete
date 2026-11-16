@@ -58,7 +58,7 @@ final class Banco
                 serie INTEGER NOT NULL,
                 numero INTEGER NOT NULL,
                 venda_id TEXT NOT NULL,
-                situacao TEXT NOT NULL,        -- pendente | inutilizada | cancelada | erro
+                situacao TEXT NOT NULL,        -- pendente | inutilizada | cancelada | erro | descartada
                 mensagem TEXT,
                 criado_em TEXT NOT NULL
             );

@@ -94,6 +94,7 @@ export const cancelarNota = (estado, chave, justificativa) =>
 export const situacao = (estado, sefaz = false) => chamar(estado, 'GET', `/situacao${sefaz ? '?sefaz=1' : ''}`);
 export const transmitirPendentes = (estado) =>
   chamar(estado, 'POST', '/pendentes/transmitir', null, { tempo: TEMPO_EMISSAO_MS });
+export const descartarIncertas = (estado) => chamar(estado, 'POST', '/pendentes/descartar');
 export const baixarXmlsDoMes = (estado, mes) => chamar(estado, 'GET', `/xml/${mes}`, null, { binario: true });
 
 /**

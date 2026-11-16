@@ -245,6 +245,22 @@ final class Emissor
         return $resultado;
     }
 
+    /**
+     * Só em homologação: descarta os números incertos que a SEFAZ não deixou inutilizar (ex.: 999 da SEFAZ-GO).
+     * Em produção não existe essa saída: o número precisa ser cancelado ou inutilizado.
+     */
+    public function descartarIncertas(): array
+    {
+        if ($this->config->ambiente !== 2) {
+            throw new ErroValidacao('Só é possível descartar pendências em homologação. Em produção, procure o contador.');
+        }
+        $incertas = $this->banco->incertasPendentes(2);
+        foreach ($incertas as $incerta) {
+            $this->banco->resolverIncerta($incerta['chave'], 'descartada', 'Descartada manualmente (homologação).');
+        }
+        return ['descartadas' => count($incertas)];
+    }
+
     /** Uma tentativa sem resposta: se a SEFAZ autorizou, cancela (a venda já tem a nota de contingência); senão inutiliza o número. */
     private function resolverIncerta(Tools $tools, array $incerta): void
     {
@@ -376,6 +392,7 @@ final class Emissor
                 'confereComEmitente' => $cert->getCnpj() === $this->config->cnpj(),
             ],
             'pendentes' => count($this->banco->notasEmContingencia($ambiente)) + count($this->banco->incertasPendentes($ambiente)),
+            'incertas' => count($this->banco->incertasPendentes($ambiente)),
             'comProblema' => array_map(fn ($n) => [
                 'chave' => $n['chave'], 'numero' => (int) $n['numero'], 'motivo' => $n['mensagem'],
             ], $this->banco->notasComProblema($ambiente)),

@@ -296,6 +296,17 @@ teste('cancela nota autorizada e guarda o XML do cancelamento', function () use 
     igual('cancelada', $emissor->cancelar($chave, 'Cliente desistiu da compra')['situacao'], 'cancelar de novo');
 });
 
+teste('homologação: descarta número incerto que a SEFAZ não deixa inutilizar', function () use ($emissor, $sefaz, $banco) {
+    $sefaz->modos = ['sem_rede'];
+    $emissor->emitir(pedido('venda-descarte'));
+    igual(1, $emissor->situacao(false)['incertas']);
+    igual(1, $emissor->descartarIncertas()['descartadas']);
+    igual(0, count($banco->incertasPendentes(2)));
+    $sefaz->modos = ['autoriza'];
+    $emissor->transmitirPendentes(); // a nota de contingência da venda continua sendo enviada normalmente
+    igual(0, $emissor->situacao(false)['pendentes']);
+});
+
 teste('situação: certificado, numeração e SEFAZ', function () use ($emissor) {
     $s = $emissor->situacao(true);
     igual('homologacao', $s['ambiente']);

@@ -151,7 +151,9 @@ export function renderizar(raiz, app) {
             : `<span class="tag perigo">fora do ar</span> ${esc(s.sefaz?.motivo || '')}`}</td></tr>
           <tr><td>Série / próximo número</td><td>${s.serie} / ${s.proximoNumero}</td></tr>
           <tr><td>Aguardando envio</td><td>${s.pendentes
-            ? `<span class="tag aviso">${s.pendentes}</span> <button type="button" class="btn mini" data-acao="transmitir">Enviar agora</button>`
+            ? `<span class="tag aviso">${s.pendentes}</span> <button type="button" class="btn mini" data-acao="transmitir">Enviar agora</button>
+               ${s.ambiente === 'homologacao' && s.incertas
+                 ? '<button type="button" class="btn mini" data-acao="descartar-incertas">Descartar (só em testes)</button>' : ''}`
             : '<span class="tag ok">nenhuma</span>'}</td></tr>
         </table>
         ${s.comProblema.length ? `<div class="alerta"><strong>Notas recusadas após contingência</strong> (procure o contador):
@@ -207,6 +209,17 @@ export function renderizar(raiz, app) {
       try {
         const r = await fiscal.sincronizarPendentes(app);
         avisar(r?.erro ? r.erro : `${r?.autorizadas || 0} nota(s) enviada(s) e autorizada(s).`, r?.erro ? 'erro' : 'ok');
+      } catch (e) {
+        avisar(e.message, 'erro');
+      }
+      mostrarSituacaoFiscal();
+    }
+    if (acao === 'descartar-incertas') {
+      if (!(await confirmar('Descartar os números de teste que a SEFAZ não deixou inutilizar? '
+        + 'Isso só existe em homologação e não afeta as vendas.'))) return;
+      try {
+        const r = await fiscal.descartarIncertas(estado);
+        avisar(`${r.descartadas} pendência(s) de teste descartada(s).`);
       } catch (e) {
         avisar(e.message, 'erro');
       }

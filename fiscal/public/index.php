@@ -11,6 +11,7 @@
  *   GET  /nfce/{chave}              dados de uma nota (para reimprimir)
  *   POST /nfce/{chave}/cancelar     {"justificativa": "..."}
  *   POST /pendentes/transmitir      envia notas de contingência e resolve tentativas incertas
+ *   POST /pendentes/descartar       só em homologação: descarta os números incertos que não puderam ser resolvidos
  *   GET  /xml/{AAAA-MM}             XMLs do mês (.zip) para o contador
  */
 
@@ -105,6 +106,9 @@ try {
     }
     if ($metodo === 'POST' && $caminho === '/pendentes/transmitir') {
         responder(200, $emissor->transmitirPendentes());
+    }
+    if ($metodo === 'POST' && $caminho === '/pendentes/descartar') {
+        responder(200, $emissor->descartarIncertas());
     }
     if ($metodo === 'GET' && preg_match('#^/xml/(\d{4}-\d{2})$#', $caminho, $m)) {
         $zip = $emissor->zipDoMes($m[1]);
