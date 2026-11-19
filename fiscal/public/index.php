@@ -89,7 +89,7 @@ try {
         $soap = new Recanto\Fiscal\Testes\SefazSimulada();
         $soap->modos = array_filter(explode(',', (string) getenv('RECANTO_FISCAL_MODOS')));
     }
-    $emissor = new Emissor($config, new Banco($config->pastaDados), new Arquivos($config->pastaXml), $soap);
+    $emissor = new Emissor($config, new Banco($config->pastaDados), Arquivos::doConfig($config), $soap);
     $corpo = json_decode((string) file_get_contents('php://input'), true);
 
     if ($metodo === 'GET' && $caminho === '/situacao') {

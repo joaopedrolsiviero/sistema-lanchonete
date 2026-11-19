@@ -76,6 +76,22 @@ final class Emissor
 
     // ------------------------------------------------------------------ emissão
 
+    /**
+     * Reserva o próximo número. Se o banco do emissor não tem a numeração desta série (instalação nova ou
+     * pasta "dados" perdida), continua a partir do maior número encontrado nos XMLs já guardados, para não
+     * repetir números que a SEFAZ recusaria.
+     */
+    private function reservarNumero(int $ambiente, int $serie): int
+    {
+        if (!$this->banco->temNumeracao($ambiente, $serie)) {
+            $maior = $this->arquivos->maiorNumero($this->config->cnpj(), $serie);
+            if ($maior > 0) {
+                $this->banco->definirProximoNumero($ambiente, $serie, $maior + 1);
+            }
+        }
+        return $this->banco->reservarNumero($ambiente, $serie);
+    }
+
     public function emitir(mixed $dados): array
     {
         $pedido = Pedido::validar($dados);
@@ -89,7 +105,7 @@ final class Emissor
 
         $tools = $this->tools();
         $serie = $this->config->serie;
-        $numero = $this->banco->reservarNumero($ambiente, $serie);
+        $numero = $this->reservarNumero($ambiente, $serie);
         $dhEmi = new DateTimeImmutable('now', $this->fuso);
 
         try {
@@ -144,7 +160,7 @@ final class Emissor
     {
         $ambiente = $this->config->ambiente;
         $serie = $this->config->serie;
-        $numero = $this->banco->reservarNumero($ambiente, $serie);
+        $numero = $this->reservarNumero($ambiente, $serie);
         $dhEmi = new DateTimeImmutable('now', $this->fuso);
         try {
             $xml = $this->tools()->signNFe($this->montar($pedido, $numero, $dhEmi, 9, $motivo));

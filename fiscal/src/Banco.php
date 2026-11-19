@@ -103,6 +103,13 @@ final class Banco
             ->execute([$numero, $ambiente, $serie, $numero + 1]);
     }
 
+    public function temNumeracao(int $ambiente, int $serie): bool
+    {
+        $st = $this->pdo->prepare('SELECT 1 FROM numeracao WHERE ambiente = ? AND serie = ?');
+        $st->execute([$ambiente, $serie]);
+        return $st->fetchColumn() !== false;
+    }
+
     public function proximoNumero(int $ambiente, int $serie): int
     {
         $st = $this->pdo->prepare('SELECT proximo FROM numeracao WHERE ambiente = ? AND serie = ?');

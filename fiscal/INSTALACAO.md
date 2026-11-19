@@ -101,7 +101,8 @@ Produtos sem NCM aparecem com a etiqueta **"sem NCM"** e o caixa não deixa vend
   O prazo para cancelar NFC-e é curto — cancele logo após a venda.
 - **XMLs para o contador:** Ajustes → Nota fiscal → *Baixar .zip para o contador* (escolha o mês).
   Os XMLs também ficam na pasta configurada em `pastaXml`, organizados por ano/mês, e **nunca são apagados**
-  (a lei exige guardar por pelo menos 5 anos).
+  (a lei exige guardar por pelo menos 5 anos). As notas de teste (homologação) ficam separadas, na subpasta
+  `homologacao`, e nunca entram no .zip do contador.
 
 ## 7. Testes em homologação (faça todos antes de ir para produção)
 
@@ -127,6 +128,9 @@ A numeração de produção é separada da de homologação e começa em 1. Se a
 programa nesta mesma série, avise antes: é preciso continuar a numeração de onde parou (ou usar outra série).
 
 ## 9. Manutenção
+
+- **Computador formatado ou trocado:** instale de novo e aponte `pastaXml` para a mesma pasta de XMLs (por isso
+  ela fica no OneDrive). O emissor lê os XMLs e continua a numeração de onde parou, sem repetir números.
 
 - **Atualizar o emissor** (novas regras da SEFAZ / reforma tributária): rode de novo o comando do passo 1.
   Configuração, certificado, notas e XMLs são mantidos.

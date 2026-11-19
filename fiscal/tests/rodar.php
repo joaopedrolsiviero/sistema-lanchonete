@@ -123,7 +123,7 @@ function novoAmbiente(string $base, string $nome): array
     ], $dir);
     $sefaz = new SefazSimulada();
     $banco = new Banco($config->pastaDados);
-    $emissor = new Emissor($config, $banco, new Arquivos($config->pastaXml), $sefaz);
+    $emissor = new Emissor($config, $banco, Arquivos::doConfig($config), $sefaz);
     return [$emissor, $sefaz, $banco, $config];
 }
 
@@ -177,7 +177,7 @@ teste('emite e autoriza NFC-e (XML válido no layout oficial)', function () use 
     verdade($r['protocolo'] !== null, 'sem protocolo');
     verdade(str_contains((string) $r['qrCode'], 'sefaz.go.gov.br'), 'QR Code sem URL de GO: ' . $r['qrCode']);
     verdade(str_starts_with((string) $r['qrCodeImagem'], 'data:image/svg+xml;base64,'), 'imagem do QR');
-    $arquivo = $config->pastaXml . '/' . date('Y/m') . "/{$r['chave']}-nfce.xml";
+    $arquivo = $config->pastaXml . '/homologacao/' . date('Y/m') . "/{$r['chave']}-nfce.xml";
     verdade(is_file($arquivo), "XML não gravado em $arquivo");
     $xml = file_get_contents($arquivo);
     verdade(str_contains($xml, '<nfeProc'), 'XML sem protocolo (nfeProc)');
@@ -206,7 +206,7 @@ teste('Pix e cartão levam tpIntegra; CPF na nota vai no destinatário; desconto
         'cpf' => '529.982.247-25', 'desconto' => 300,
         'pagamento' => ['forma' => 'debito', 'valorPago' => 2400, 'troco' => 0],
     ]));
-    $xml = file_get_contents($config->pastaXml . '/' . date('Y/m') . "/{$r['chave']}-nfce.xml");
+    $xml = file_get_contents($config->pastaXml . '/homologacao/' . date('Y/m') . "/{$r['chave']}-nfce.xml");
     verdade(str_contains($xml, '<CPF>52998224725</CPF>'), 'CPF');
     verdade(str_contains($xml, '<tPag>04</tPag>') && str_contains($xml, '<tpIntegra>2</tpIntegra>'), 'débito');
     verdade(str_contains($xml, '<vDesc>3.00</vDesc>') && str_contains($xml, '<vNF>24.00</vNF>'), 'desconto/total');
@@ -223,7 +223,7 @@ teste('sem internet: emite em contingência offline e guarda a tentativa incerta
     verdade($r['protocolo'] === null, 'contingência não tem protocolo ainda');
     verdade(str_contains((string) $r['qrCode'], 'sefaz.go.gov.br'), 'QR Code na contingência');
     igual(1, count($banco->incertasPendentes(2)));
-    $xml = file_get_contents($config->pastaXml . '/' . date('Y/m') . "/{$r['chave']}-nfce.xml");
+    $xml = file_get_contents($config->pastaXml . '/homologacao/' . date('Y/m') . "/{$r['chave']}-nfce.xml");
     verdade(str_contains($xml, '<tpEmis>9</tpEmis>') && str_contains($xml, '<xJust>'), 'campos de contingência');
 });
 
@@ -258,7 +258,7 @@ teste('internet volta: transmite as pendentes e inutiliza o número incerto', fu
     igual(0, $r['aindaPendentes']);
     igual(null, $r['erro']);
     igual([], $banco->notasEmContingencia(2));
-    verdade(is_file($config->pastaXml . '/' . date('Y/m') . '/inutilizacao-serie1-num4.xml'), 'XML da inutilização');
+    verdade(is_file($config->pastaXml . '/homologacao/' . date('Y/m') . '/inutilizacao-serie1-num4.xml'), 'XML da inutilização');
     $nota = $emissor->nota($banco->notaPorVenda('venda4', 2)['chave']);
     igual('autorizada', $nota['situacao']);
     verdade($nota['protocolo'] !== null, 'protocolo após transmitir');
@@ -292,7 +292,7 @@ teste('cancela nota autorizada e guarda o XML do cancelamento', function () use 
     lanca(ErroValidacao::class, fn () => $emissor->cancelar($chave, 'curta'), '15 a 255');
     $r = $emissor->cancelar($chave, 'Cliente desistiu da compra');
     igual('cancelada', $r['situacao']);
-    verdade(is_file($config->pastaXml . '/' . date('Y/m') . "/$chave-cancelamento.xml"), 'XML do cancelamento');
+    verdade(is_file($config->pastaXml . '/homologacao/' . date('Y/m') . "/$chave-cancelamento.xml"), 'XML do cancelamento');
     igual('cancelada', $emissor->cancelar($chave, 'Cliente desistiu da compra')['situacao'], 'cancelar de novo');
 });
 
@@ -305,6 +305,40 @@ teste('homologação: descarta número incerto que a SEFAZ não deixa inutilizar
     $sefaz->modos = ['autoriza'];
     $emissor->transmitirPendentes(); // a nota de contingência da venda continua sendo enviada normalmente
     igual(0, $emissor->situacao(false)['pendentes']);
+});
+
+teste('pasta "dados" perdida: continua a numeração a partir dos XMLs', function () use ($config, $sefaz, $banco, $tmp) {
+    $arquivos = Arquivos::doConfig($config);
+    $maior = $arquivos->maiorNumero(CNPJ, 1);
+    verdade($maior >= 5, "maior número nos XMLs: $maior");
+    igual($banco->proximoNumero(2, 1), $maior + 1, 'XMLs e banco concordam');
+    $emissorNovo = new Emissor($config, new Banco("$tmp/dados-perdidos"), $arquivos, $sefaz);
+    $sefaz->modos = ['autoriza'];
+    $r = $emissorNovo->emitir(pedido('venda-apos-formatar'));
+    igual('autorizada', $r['situacao']);
+    igual($maior + 1, $r['numero'], 'não volta para o nº 1');
+    // Notas de produção na mesma pasta não contam para a numeração de homologação (e vice-versa).
+    igual(0, (new Arquivos($config->pastaXml . '/homologacao', 1))->maiorNumero(CNPJ, 1));
+});
+
+teste('XMLs de homologação ficam separados e o zip leva só os do ambiente', function () use ($emissor, $config) {
+    $pasta = $config->pastaXml . '/homologacao/' . date('Y/m');
+    verdade(is_dir($pasta), 'subpasta homologacao');
+    verdade(glob($config->pastaXml . '/' . date('Y') . '/*') === [], 'nada de homologação na pasta das notas reais');
+    $antes = new ZipArchive();
+    $zip = $emissor->zipDoMes(date('Y-m'));
+    $antes->open($zip);
+    $qtd = $antes->numFiles;
+    $antes->close();
+    unlink($zip);
+    file_put_contents("$pasta/intrusa-producao.xml", '<NFe><infNFe><ide><tpAmb>1</tpAmb></ide></infNFe></NFe>');
+    $zip = $emissor->zipDoMes(date('Y-m'));
+    $depois = new ZipArchive();
+    $depois->open($zip);
+    igual($qtd, $depois->numFiles, 'XML de outro ambiente fica fora do zip');
+    $depois->close();
+    unlink($zip);
+    unlink("$pasta/intrusa-producao.xml");
 });
 
 teste('situação: certificado, numeração e SEFAZ', function () use ($emissor) {
