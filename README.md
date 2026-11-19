@@ -4,7 +4,8 @@ Sistema de caixa para o **Recanto do Café** (cafeteria e salgados) que roda no 
 
 - **Caixa (PDV):** monte o pedido tocando nos produtos, adicione observações ("sem açúcar", "leite sem lactose") e aplique desconto.
   Ao confirmar o pedido, abre a tela de pagamento: forma de pagamento (dinheiro com atalhos de notas e cálculo de troco,
-  Pix, débito ou crédito), CPF na nota e finalização, com impressão da comanda ou da NFC-e.
+  Pix, débito ou crédito), CPF na nota e **Finalizar e imprimir** ou **Finalizar sem imprimir** (a NFC-e é emitida
+  nos dois casos; em contingência o cupom sempre é impresso). Dá para reimprimir depois em Relatórios.
 - **Abertura e fechamento de caixa:** abre com o fundo de troco; registra sangrias (retiradas) e suprimentos
   (reforço de troco); fechamento com **contagem às cegas**: quem fecha conta o dinheiro sem ver o valor esperado;
   depois de confirmar, aparecem as vendas por forma de pagamento, o esperado na gaveta e a diferença (sobra/falta),

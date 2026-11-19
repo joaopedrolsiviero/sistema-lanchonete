@@ -171,6 +171,8 @@ label.check input { width: auto; margin: 0; }
 .tela-pagamento .linha { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .5rem; }
 .tela-pagamento label.linha input { width: 160px; margin: 0; text-align: right; }
 .atalhos-dinheiro { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+.botoes-finalizar { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+@media (max-width: 600px) { .botoes-finalizar { grid-template-columns: 1fr; } }
 
 /* ---------- Abertura e fechamento de caixa ---------- */
 .barra-caixa {

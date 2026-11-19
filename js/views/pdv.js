@@ -227,10 +227,14 @@ function renderizarPagamento(raiz, app, caixa) {
           <input type="text" inputmode="numeric" class="cpf" placeholder="000.000.000-00" maxlength="14"
             value="${esc(pedido.cpf)}">
         </label>` : ''}
-      <button type="button" class="btn primario grande finalizar">Finalizar pedido</button>
+      <div class="botoes-finalizar">
+        <button type="button" class="btn primario grande finalizar" data-imprimir="1">Finalizar e imprimir</button>
+        <button type="button" class="btn grande finalizar" data-imprimir="0">Finalizar sem imprimir</button>
+      </div>
     </section>`;
 
   const $ = (sel) => raiz.querySelector(sel);
+  const habilitarFinalizar = (sim) => raiz.querySelectorAll('.finalizar').forEach((b) => { b.disabled = !sim; });
 
   function atualizar() {
     raiz.querySelectorAll('[data-pag]').forEach((b) => b.classList.toggle('ativo', b.dataset.pag === pedido.pagamento));
@@ -241,7 +245,7 @@ function renderizarPagamento(raiz, app, caixa) {
       $('.troco').textContent = pedido.recebido == null ? '—' : troco < 0 ? 'Valor insuficiente' : formatarMoeda(troco);
       $('.troco').classList.toggle('negativo', pedido.recebido != null && troco < 0);
     }
-    $('.finalizar').disabled = !pedido.pagamento;
+    habilitarFinalizar(!!pedido.pagamento);
   }
 
   function voltar() {
@@ -256,12 +260,26 @@ function renderizarPagamento(raiz, app, caixa) {
     return { desconto: pedido.desconto, pagamento: pedido.pagamento, recebido: pedido.recebido ?? undefined };
   }
 
-  /** Grava a venda (com ou sem nota) e mostra o resumo com a opção de imprimir. */
+  let imprimir = true; // escolhido no botão: "Finalizar e imprimir" ou "Finalizar sem imprimir"
+
+  /** Grava a venda (com ou sem nota), imprime se foi pedido e mostra o resumo. */
   function concluir(extra, nota) {
     const venda = registrarVenda(app.estado, pedido.itens, { ...opcoesVenda(), ...extra });
     app.salvar();
     limparPedido();
     renderizar(raiz, app);
+    const imprimirAgora = () => setTimeout(() => (nota
+      ? imprimirNfce(venda, nota)
+      : imprimirComanda(venda, app.estado.config.nomeLoja)), 50);
+    // Em contingência o cupom precisa ser impresso (a nota ainda não foi autorizada), mesmo sem pedir.
+    const imprimiu = imprimir || !!nota?.contingencia;
+    if (imprimiu) imprimirAgora();
+    const situacaoEspecial = nota?.contingencia || extra.nfce?.situacao === 'pendente_emissao';
+    if (!situacaoEspecial) {
+      avisar([`Pedido #${venda.numero} registrado`, nota ? `NFC-e nº ${nota.numero} autorizada` : '',
+        venda.troco ? `troco ${formatarMoeda(venda.troco)}` : ''].filter(Boolean).join(' · '));
+      return;
+    }
     const linhaNota = !nota ? ''
       : nota.contingencia
         ? `<p class="aviso-nfce">NFC-e nº ${nota.numero} emitida <strong>em contingência</strong> (sem internet).
@@ -276,16 +294,15 @@ function renderizarPagamento(raiz, app, caixa) {
           : ''}
         <p class="destaque">Total: <strong>${formatarMoeda(venda.total)}</strong></p>
         ${venda.troco ? `<p class="destaque">Troco: <strong>${formatarMoeda(venda.troco)}</strong></p>` : ''}`,
-      textoSalvar: nota ? 'Imprimir NFC-e' : 'Imprimir comanda',
+      textoSalvar: imprimiu ? 'Imprimir de novo' : nota ? 'Imprimir NFC-e' : 'Imprimir comanda',
       textoFechar: 'Fechar',
-      aoSalvar: () => setTimeout(() => (nota
-        ? imprimirNfce(venda, nota)
-        : imprimirComanda(venda, app.estado.config.nomeLoja)), 50),
+      aoSalvar: imprimirAgora,
     });
   }
 
-  async function finalizar() {
+  async function finalizar(comImpressao = true) {
     if (finalizando) return;
+    imprimir = comImpressao;
     try {
       prepararVenda(app.estado, pedido.itens, opcoesVenda()); // confere tudo antes de emitir a nota
     } catch (e) {
@@ -317,7 +334,7 @@ function renderizarPagamento(raiz, app, caixa) {
 
     const tentar = async () => {
       finalizando = true;
-      $('.finalizar').disabled = true;
+      habilitarFinalizar(false);
       abrirDialogo({ titulo: 'Emitindo NFC-e…', corpo: '<p>Aguarde a autorização da SEFAZ.</p>', bloqueado: true });
       try {
         const nota = await emitir(app.estado, pedidoFiscal);
@@ -349,8 +366,7 @@ function renderizarPagamento(raiz, app, caixa) {
         }
       } finally {
         finalizando = false;
-        const botao = $('.finalizar');
-        if (botao) botao.disabled = !pedido.pagamento;
+        habilitarFinalizar(!!pedido.pagamento); // sem efeito se a venda foi concluída (a tela já mudou)
       }
     };
     await tentar();
@@ -375,7 +391,10 @@ function renderizarPagamento(raiz, app, caixa) {
   $('.recebido').addEventListener('input', (ev) => { pedido.recebido = lerMoeda(ev.target.value); atualizar(); });
   $('.recebido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') finalizar(); });
   $('.cpf')?.addEventListener('input', (ev) => { pedido.cpf = ev.target.value; });
-  $('.finalizar').addEventListener('click', finalizar);
+  $('.botoes-finalizar').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.finalizar');
+    if (b) finalizar(b.dataset.imprimir === '1');
+  });
 
   montarBarraCaixa($('.barra-caixa'), app, caixa, () => renderizar(raiz, app));
   atualizar();
