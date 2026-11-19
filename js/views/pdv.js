@@ -18,13 +18,16 @@ const pedido = {
   pagamento: null,
   recebido: null,
   cpf: '',
+  etapa: 'itens', // 'itens' (montando o pedido) ou 'pagamento' (tela de pagamento, depois de confirmar)
   categoria: 'todas',
   busca: '',
 };
 
 function limparPedido() {
-  Object.assign(pedido, { itens: [], desconto: 0, pagamento: null, recebido: null, cpf: '' });
+  Object.assign(pedido, { itens: [], desconto: 0, pagamento: null, recebido: null, cpf: '', etapa: 'itens' });
 }
+
+const centavosParaCampo = (v) => (v ? (v / 100).toFixed(2).replace('.', ',') : '');
 
 export function renderizar(raiz, app) {
   const caixa = caixaAberto(app.estado);
@@ -32,6 +35,12 @@ export function renderizar(raiz, app) {
     renderizarAbertura(raiz, app, () => renderizar(raiz, app));
     return;
   }
+
+  if (pedido.etapa === 'pagamento' && pedido.itens.length) {
+    renderizarPagamento(raiz, app, caixa);
+    return;
+  }
+  pedido.etapa = 'itens';
 
   raiz.innerHTML = `
     <div class="barra-caixa painel"></div>
@@ -49,27 +58,11 @@ export function renderizar(raiz, app) {
         <div class="fechamento">
           <label class="linha">Desconto (R$)
             <input type="text" inputmode="decimal" class="desconto" placeholder="0,00"
-              value="${pedido.desconto ? (pedido.desconto / 100).toFixed(2).replace('.', ',') : ''}">
+              value="${centavosParaCampo(pedido.desconto)}">
           </label>
           <div class="linha"><span>Subtotal</span><span class="subtotal"></span></div>
           <div class="linha total"><span>Total</span><span class="valor-total"></span></div>
-          ${fiscalAtivo(app.estado) ? `
-            <label class="linha">CPF na nota (opcional)
-              <input type="text" inputmode="numeric" class="cpf" placeholder="000.000.000-00" maxlength="14"
-                value="${esc(pedido.cpf)}">
-            </label>` : ''}
-          <div class="pagamentos">
-            ${Object.entries(FORMAS_PAGAMENTO).map(([k, nome]) =>
-              `<button type="button" class="btn pag" data-pag="${k}">${nome}</button>`).join('')}
-          </div>
-          <div class="dinheiro" hidden>
-            <label class="linha">Valor recebido
-              <input type="text" inputmode="decimal" class="recebido" placeholder="0,00"
-                value="${pedido.recebido ? (pedido.recebido / 100).toFixed(2).replace('.', ',') : ''}">
-            </label>
-            <div class="linha"><span>Troco</span><strong class="troco"></strong></div>
-          </div>
-          <button type="button" class="btn primario grande finalizar">Finalizar pedido</button>
+          <button type="button" class="btn primario grande confirmar">Confirmar pedido</button>
           <button type="button" class="btn link limpar">Limpar pedido</button>
         </div>
       </aside>
@@ -125,16 +118,7 @@ export function renderizar(raiz, app) {
     const t = calcularTotais(pedido.itens, pedido.desconto);
     $('.subtotal').textContent = formatarMoeda(t.subtotal);
     $('.valor-total').textContent = formatarMoeda(t.total);
-    raiz.querySelectorAll('[data-pag]').forEach((b) =>
-      b.classList.toggle('ativo', b.dataset.pag === pedido.pagamento));
-    const emDinheiro = pedido.pagamento === 'dinheiro';
-    $('.dinheiro').hidden = !emDinheiro;
-    if (emDinheiro) {
-      const troco = (pedido.recebido ?? 0) - t.total;
-      $('.troco').textContent = pedido.recebido == null ? '—' : troco < 0 ? 'Valor insuficiente' : formatarMoeda(troco);
-      $('.troco').classList.toggle('negativo', pedido.recebido != null && troco < 0);
-    }
-    $('.finalizar').disabled = !pedido.itens.length;
+    $('.confirmar').disabled = !pedido.itens.length;
   }
 
   function adicionar(produto) {
@@ -142,6 +126,128 @@ export function renderizar(raiz, app) {
     if (existente) existente.qtd += 1;
     else pedido.itens.push({ produtoId: produto.id, nome: produto.nome, preco: produto.preco, qtd: 1, obs: '' });
     renderizarItens();
+  }
+
+  // ----- Eventos -----
+  $('.busca').addEventListener('input', (ev) => { pedido.busca = ev.target.value; renderizarGrade(); });
+
+  $('.chips').addEventListener('click', (ev) => {
+    const chip = ev.target.closest('[data-cat]');
+    if (!chip) return;
+    pedido.categoria = chip.dataset.cat;
+    renderizarChips();
+    renderizarGrade();
+  });
+
+  $('.grade').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-id]');
+    if (!btn) return;
+    const produto = app.estado.produtos.find((p) => p.id === btn.dataset.id);
+    if (produto) adicionar(produto);
+  });
+
+  $('.itens-pedido').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button');
+    if (!b) return;
+    if (b.dataset.mais) pedido.itens[b.dataset.mais].qtd += 1;
+    if (b.dataset.menos) {
+      const item = pedido.itens[b.dataset.menos];
+      item.qtd -= 1;
+      if (item.qtd <= 0) pedido.itens.splice(b.dataset.menos, 1);
+    }
+    if (b.dataset.obs) {
+      const item = pedido.itens[b.dataset.obs];
+      const obs = window.prompt(`Observação para ${item.nome} (ex: sem açúcar):`, item.obs);
+      if (obs !== null) item.obs = obs.trim();
+    }
+    renderizarItens();
+  });
+
+  $('.desconto').addEventListener('input', (ev) => { pedido.desconto = lerMoeda(ev.target.value) || 0; atualizarTotais(); });
+
+  $('.confirmar').addEventListener('click', () => {
+    if (!pedido.itens.length) return;
+    const t = calcularTotais(pedido.itens, pedido.desconto);
+    if (t.total <= 0) {
+      avisar('O total do pedido precisa ser maior que zero. Confira o desconto.', 'erro');
+      return;
+    }
+    pedido.etapa = 'pagamento';
+    renderizar(raiz, app);
+  });
+  $('.limpar').addEventListener('click', () => {
+    if (pedido.itens.length && !confirmar('Limpar o pedido atual?')) return;
+    limparPedido();
+    renderizar(raiz, app);
+  });
+
+  montarBarraCaixa($('.barra-caixa'), app, caixa, () => renderizar(raiz, app));
+  renderizarChips();
+  renderizarGrade();
+  renderizarItens();
+}
+
+/** Tela de pagamento: aparece depois de confirmar o pedido. */
+function renderizarPagamento(raiz, app, caixa) {
+  const fiscal = fiscalAtivo(app.estado);
+  const totais = calcularTotais(pedido.itens, pedido.desconto);
+  raiz.innerHTML = `
+    <div class="barra-caixa painel"></div>
+    <section class="tela-pagamento painel">
+      <button type="button" class="btn link voltar">← Voltar ao pedido</button>
+      <h2>Pagamento — pedido #${proximoNumeroPedido(app.estado)}</h2>
+      <ul class="resumo-pagamento">
+        ${pedido.itens.map((i) => `
+          <li><span>${i.qtd}× ${esc(i.nome)}${i.obs ? ` <small class="muted">(${esc(i.obs)})</small>` : ''}</span>
+            <span>${formatarMoeda(i.preco * i.qtd)}</span></li>`).join('')}
+        ${totais.desconto ? `
+          <li class="muted"><span>Subtotal</span><span>${formatarMoeda(totais.subtotal)}</span></li>
+          <li class="muted"><span>Desconto</span><span>− ${formatarMoeda(totais.desconto)}</span></li>` : ''}
+      </ul>
+      <div class="total-pagamento"><span>Total</span><strong>${formatarMoeda(totais.total)}</strong></div>
+
+      <h3>Forma de pagamento</h3>
+      <div class="pagamentos">
+        ${Object.entries(FORMAS_PAGAMENTO).map(([k, nome]) =>
+          `<button type="button" class="btn pag" data-pag="${k}">${nome}</button>`).join('')}
+      </div>
+      <div class="dinheiro" hidden>
+        <label class="linha">Valor recebido
+          <input type="text" inputmode="decimal" class="recebido" placeholder="0,00"
+            value="${centavosParaCampo(pedido.recebido)}">
+        </label>
+        <div class="atalhos-dinheiro">
+          ${atalhosDinheiro(totais.total).map((v) =>
+            `<button type="button" class="btn mini" data-valor="${v}">${v === totais.total ? 'Valor exato' : formatarMoeda(v)}</button>`).join('')}
+        </div>
+        <div class="linha"><span>Troco</span><strong class="troco"></strong></div>
+      </div>
+      ${fiscal ? `
+        <label class="linha cpf-nota">CPF na nota (opcional)
+          <input type="text" inputmode="numeric" class="cpf" placeholder="000.000.000-00" maxlength="14"
+            value="${esc(pedido.cpf)}">
+        </label>` : ''}
+      <button type="button" class="btn primario grande finalizar">Finalizar pedido</button>
+    </section>`;
+
+  const $ = (sel) => raiz.querySelector(sel);
+
+  function atualizar() {
+    raiz.querySelectorAll('[data-pag]').forEach((b) => b.classList.toggle('ativo', b.dataset.pag === pedido.pagamento));
+    const emDinheiro = pedido.pagamento === 'dinheiro';
+    $('.dinheiro').hidden = !emDinheiro;
+    if (emDinheiro) {
+      const troco = (pedido.recebido ?? 0) - totais.total;
+      $('.troco').textContent = pedido.recebido == null ? '—' : troco < 0 ? 'Valor insuficiente' : formatarMoeda(troco);
+      $('.troco').classList.toggle('negativo', pedido.recebido != null && troco < 0);
+    }
+    $('.finalizar').disabled = !pedido.pagamento;
+  }
+
+  function voltar() {
+    if (finalizando) return;
+    pedido.etapa = 'itens';
+    renderizar(raiz, app);
   }
 
   let finalizando = false;
@@ -244,71 +350,45 @@ export function renderizar(raiz, app) {
       } finally {
         finalizando = false;
         const botao = $('.finalizar');
-        if (botao) botao.disabled = !pedido.itens.length;
+        if (botao) botao.disabled = !pedido.pagamento;
       }
     };
     await tentar();
   }
 
-  // ----- Eventos -----
-  $('.busca').addEventListener('input', (ev) => { pedido.busca = ev.target.value; renderizarGrade(); });
 
-  $('.chips').addEventListener('click', (ev) => {
-    const chip = ev.target.closest('[data-cat]');
-    if (!chip) return;
-    pedido.categoria = chip.dataset.cat;
-    renderizarChips();
-    renderizarGrade();
-  });
-
-  $('.grade').addEventListener('click', (ev) => {
-    const btn = ev.target.closest('[data-id]');
-    if (!btn) return;
-    const produto = app.estado.produtos.find((p) => p.id === btn.dataset.id);
-    if (produto) adicionar(produto);
-  });
-
-  $('.itens-pedido').addEventListener('click', (ev) => {
-    const b = ev.target.closest('button');
-    if (!b) return;
-    if (b.dataset.mais) pedido.itens[b.dataset.mais].qtd += 1;
-    if (b.dataset.menos) {
-      const item = pedido.itens[b.dataset.menos];
-      item.qtd -= 1;
-      if (item.qtd <= 0) pedido.itens.splice(b.dataset.menos, 1);
-    }
-    if (b.dataset.obs) {
-      const item = pedido.itens[b.dataset.obs];
-      const obs = window.prompt(`Observação para ${item.nome} (ex: sem açúcar):`, item.obs);
-      if (obs !== null) item.obs = obs.trim();
-    }
-    renderizarItens();
-  });
-
-  $('.desconto').addEventListener('input', (ev) => { pedido.desconto = lerMoeda(ev.target.value) || 0; atualizarTotais(); });
-  $('.recebido').addEventListener('input', (ev) => { pedido.recebido = lerMoeda(ev.target.value); atualizarTotais(); });
-  $('.recebido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') finalizar(); });
-  $('.cpf')?.addEventListener('input', (ev) => { pedido.cpf = ev.target.value; });
-
+  $('.voltar').addEventListener('click', voltar);
   raiz.querySelector('.pagamentos').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-pag]');
     if (!b) return;
     pedido.pagamento = b.dataset.pag;
-    atualizarTotais();
+    atualizar();
     if (pedido.pagamento === 'dinheiro') $('.recebido').focus();
   });
-
-  $('.finalizar').addEventListener('click', finalizar);
-  $('.limpar').addEventListener('click', () => {
-    if (pedido.itens.length && !confirmar('Limpar o pedido atual?')) return;
-    limparPedido();
-    renderizar(raiz, app);
+  $('.atalhos-dinheiro').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-valor]');
+    if (!b) return;
+    pedido.recebido = Number(b.dataset.valor);
+    $('.recebido').value = centavosParaCampo(pedido.recebido);
+    atualizar();
   });
+  $('.recebido').addEventListener('input', (ev) => { pedido.recebido = lerMoeda(ev.target.value); atualizar(); });
+  $('.recebido').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') finalizar(); });
+  $('.cpf')?.addEventListener('input', (ev) => { pedido.cpf = ev.target.value; });
+  $('.finalizar').addEventListener('click', finalizar);
 
   montarBarraCaixa($('.barra-caixa'), app, caixa, () => renderizar(raiz, app));
-  renderizarChips();
-  renderizarGrade();
-  renderizarItens();
+  atualizar();
+}
+
+/** Valores sugeridos para pagamento em dinheiro: o valor exato e as notas logo acima do total. */
+function atalhosDinheiro(total) {
+  const valores = [total];
+  for (const nota of [500, 1000, 2000, 5000, 10000, 20000]) {
+    const v = Math.ceil(total / nota) * nota;
+    if (v > total && !valores.includes(v)) valores.push(v);
+  }
+  return valores.sort((a, b) => a - b).slice(0, 5);
 }
 
 function cpfValido(cpf) {

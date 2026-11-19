@@ -160,6 +160,18 @@ label.check input { width: auto; margin: 0; }
 .troco.negativo { color: var(--perigo); font-size: 1rem; }
 .fechamento .limpar { width: 100%; margin-top: .4rem; }
 
+/* ---------- Tela de pagamento (depois de confirmar o pedido) ---------- */
+.tela-pagamento { max-width: 640px; margin: 0 auto; }
+.tela-pagamento .voltar { padding-left: 0; }
+.resumo-pagamento { list-style: none; padding: 0; margin: .5rem 0; }
+.resumo-pagamento li { display: flex; justify-content: space-between; gap: 1rem; padding: .3rem 0; border-bottom: 1px dashed var(--borda); }
+.total-pagamento { display: flex; justify-content: space-between; align-items: baseline; font-size: 1.8rem; font-weight: 700;
+  border-top: 2px solid var(--borda); padding-top: .5rem; margin-bottom: 1rem; }
+.tela-pagamento .pag { padding: 1rem; font-size: 1.1rem; }
+.tela-pagamento .linha { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .5rem; }
+.tela-pagamento label.linha input { width: 160px; margin: 0; text-align: right; }
+.atalhos-dinheiro { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .5rem; }
+
 /* ---------- Abertura e fechamento de caixa ---------- */
 .barra-caixa {
   display: flex; justify-content: space-between; align-items: center; gap: .5rem 1rem; flex-wrap: wrap;
